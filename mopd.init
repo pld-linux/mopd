@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# chkconfig:	- 60 20
+# chkconfig:	345 60 20
 # description:	The mopd server allows older DEC equipment to net boot from \
 #		Linux boxes.  It (along with rarp) is rarely used anymore; \
 #		bootp and dhcp have mostly replaced both of them.
@@ -13,36 +13,50 @@
 . /etc/sysconfig/network
 
 # Check that networking is up.
-[ "${NETWORKING}" = "no" ] && exit 0
+if is_yes "${NETWORKING}"; then
+	if [ ! -f /var/lock/subsys/network -a "$1" != stop -a "$1" != status ]; then
+		msg_network_down MOPD
+		exit 1
+	fi
+else
+	exit 0
+fi
 
-[ -x /usr/sbin/mopd ] || exit 0
-
+RETVAL=0
 # See how we were called.
 case "$1" in
   start)
-	echo -n "Starting mopd: "
-	daemon mopd -a
-
-	echo
-	touch /var/lock/subsys/mopd
+	# Check if the service is already running?
+	if [ ! -f /var/lock/subsys/mopd ]; then
+		msg_starting MOPD
+		daemon mopd -a
+		RETVAL=$?
+		[ $RETVAL -eq 0 ] && touch /var/lock/subsys/mopd
+	else
+		msg_already_running MOPD
+	fi
 	;;
   stop)
-	echo -n "Stopping mopd: "
-	killproc mopd
-
-	echo
-	rm -f /var/lock/subsys/mopd
-	;;
-  status)
-	status mopd
+	if [ -f /var/lock/subsys/mopd ]; then
+		msg_stopping MOPD
+		killproc mopd
+		rm -f /var/lock/subsys/postgrey >/dev/null 2>&1
+	else
+		msg_not_running MOPD
+	fi
 	;;
   restart|reload)
 	$0 stop
 	$0 start
+	exit $?
+	;;
+  status)
+	status mopd
+	exit $?
 	;;
   *)
-	echo "Usage: mopd {start|stop|status|restart|reload}"
-	exit 1
+	msg_usage "$0 {start|stop|restart|reload|status}"
+	exit 3
 esac
 
-exit 0
+exit $RETVAL
