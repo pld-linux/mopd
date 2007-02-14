@@ -1,0 +1,20 @@
+--- file.c	2004-09-05 11:29:13.960061000 +0200
++++ buildtree/common/file.c	2004-09-05 11:30:30.087488417 +0200
+@@ -413,7 +413,7 @@
+ 		mid = new_mid;
+ 		break;
+ 	default:
+-		;
++		break;
+ 	}
+ 
+ 	return(mid);
+@@ -584,7 +584,7 @@
+ 		ex.a_trsize= mopFileGetBX((u_char *)&ex_swap, 24, 4);
+ 		ex.a_drsize= mopFileGetBX((u_char *)&ex_swap, 28, 4);
+ 		break;
+-	default:
++	default: break;
+ /*###525 [cc] syntax error before `}'%%%*/
+ 	}
+ 

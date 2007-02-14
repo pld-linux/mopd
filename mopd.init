@@ -1,0 +1,48 @@
+#!/bin/sh
+#
+# chkconfig:	- 60 20
+# description:	The mopd server allows older DEC equipment to net boot from \
+#		Linux boxes.  It (along with rarp) is rarely used anymore; \
+#		bootp and dhcp have mostly replaced both of them.
+# processname:	mopd
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+# Source networking configuration.
+. /etc/sysconfig/network
+
+# Check that networking is up.
+[ "${NETWORKING}" = "no" ] && exit 0
+
+[ -x /usr/sbin/mopd ] || exit 0
+
+# See how we were called.
+case "$1" in
+  start)
+	echo -n "Starting mopd: "
+	daemon mopd -a
+
+	echo
+	touch /var/lock/subsys/mopd
+	;;
+  stop)
+	echo -n "Stopping mopd: "
+	killproc mopd
+
+	echo
+	rm -f /var/lock/subsys/mopd
+	;;
+  status)
+	status mopd
+	;;
+  restart|reload)
+	$0 stop
+	$0 start
+	;;
+  *)
+	echo "Usage: mopd {start|stop|status|restart|reload}"
+	exit 1
+esac
+
+exit 0

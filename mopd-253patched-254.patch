@@ -1,0 +1,3697 @@
+diff -rwu mopd-2.5.3.patched/Makefile mopd-2.5.4.orig/Makefile
+--- mopd-2.5.3.patched/Makefile	2003-03-27 09:12:15.000000000 +0000
++++ mopd-2.5.4.orig/Makefile	2000-08-09 00:57:03.000000000 +0100
+@@ -1,18 +1,19 @@
+-AR = ar
+-CC = gcc
+-RANLIB = ranlib
++#make file to build linux-mopd
++SUBDIRS=common mopd mopchk mopprobe moptrace
++CFLAGS=-g
+ 
+-CFLAGS = -O2 -g
+-LDFLAGS =
+-LIBELF = -lelf
++all: 
++	for dir in ${SUBDIRS}; 	\
++	do		   	\
++	  echo making $$dir;  	\
++	  (cd $$dir; make CFLAGS="$(CFLAGS)" ) ;	\
++	done
+ 
+-SUBDIRS = common mopd mopchk mopprobe moptrace
+ 
+-all clean: 
+-	@for dir in $(SUBDIRS); do \
+-		(cd $$dir && \
+-		 $(MAKE) "AR=$(AR)" "CC=$(CC)" "RANLIB=$(RANLIB)" \
+-			 "CFLAGS=$(CFLAGS)" "LDFLAGS=$(LDFLAGS)" \
+-			 "LIBELF=$(LIBELF)" $@) || \
+-		 exit 1; \
++clean:
++	for dir in ${SUBDIRS} ;	\
++	do			\
++	  (cd $$dir ; make clean); \
+ 	done
++	
++	
+diff -rwu mopd-2.5.3.patched/common/Makefile mopd-2.5.4.orig/common/Makefile
+--- mopd-2.5.3.patched/common/Makefile	2003-03-27 09:05:58.000000000 +0000
++++ mopd-2.5.4.orig/common/Makefile	2000-08-09 00:57:49.000000000 +0100
+@@ -1,21 +1,14 @@
+-LIBS = libcommon.a
+-OBJS = cmp.o device.o dl.o file.o get.o loop-bsd.o mopdef.o nma.o pf-linux.o \
+-	pf.o print.o put.o rc.o version.o
++#simple make file for linux
+ 
+-CPPFLAGS =
+ 
+-all: $(LIBS)
++OBJS=cmp.o dl.o get.o mopdef.o  pf-linux2.o put.o device.o file.o loop-linux2.o nma.o print.o rc.o
+ 
+-libcommon.a: $(OBJS)
+-	-rm -f libcommon.a
+-	$(AR) cru libcommon.a $(OBJS)
+-	$(RANLIB) libcommon.a
++libcommon.a: ${OBJS}
++	 ar -rs libcommon.a ${OBJS}
+ 
+-.c.o:
+-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+-	
+-version.c: VERSION
+-	sed 's/.*/char version[] = "&";/' < VERSION > version.c
++.c.o: .o
++	cc -c $(CFLAGS) $<
+ 	
+ clean: 
+-	rm -f core *.a *.o version.c
++	rm -f *.o *.a *~
++	
+diff -rwu mopd-2.5.3.patched/common/cmp.c mopd-2.5.4.orig/common/cmp.c
+--- mopd-2.5.3.patched/common/cmp.c	1995-09-29 13:32:23.000000000 +0100
++++ mopd-2.5.4.orig/common/cmp.c	2000-08-08 23:41:50.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: cmp.c,v 1.2 1997/03/25 03:07:02 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,15 +29,17 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++static char rcsid[]="$NetBSD: cmp.c,v 1.2 1997/03/25 03:07:02 thorpej Exp $";
+ #endif
+ 
+ #include "os.h"
++#include "cmp.h"
+ 
+ int
+ mopCmpEAddr(addr1, addr2)
+-	register u_char *addr1, *addr2;
++	u_char *addr1, *addr2;
+ {
+-        return(bcmp((char *)addr1, (char *)addr2, 6));
++        return(memcmp((char *)addr1, (char *)addr2, 6));
+ }
+diff -rwu mopd-2.5.3.patched/common/cmp.h mopd-2.5.4.orig/common/cmp.h
+--- mopd-2.5.3.patched/common/cmp.h	1995-09-28 11:26:09.000000000 +0100
++++ mopd-2.5.4.orig/common/cmp.h	2000-08-08 22:48:05.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: cmp.h,v 1.2 1997/03/25 03:07:04 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -26,19 +28,15 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
++ *	$NetBSD: cmp.h,v 1.2 1997/03/25 03:07:04 thorpej Exp $
+  *
+  */
+ 
+ #ifndef _CMP_H_
+ #define _CMP_H_
+ 
+-#ifdef NO__P
+-int	mopCmpEAddr (/* u_char *,u_char * */);
+-#else
+ __BEGIN_DECLS
+ int	mopCmpEAddr __P((u_char *,u_char *));
+ __END_DECLS
+-#endif
+ 
+ #endif _CMP_H_
+diff -rwu mopd-2.5.3.patched/common/device.c mopd-2.5.4.orig/common/device.c
+--- mopd-2.5.3.patched/common/device.c	2003-03-27 09:14:41.000000000 +0000
++++ mopd-2.5.4.orig/common/device.c	2000-08-08 23:42:20.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: device.c,v 1.2 1997/03/25 03:07:06 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,29 +29,20 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++static char rcsid[]="$NetBSD: device.c,v 1.2 1997/03/25 03:07:06 thorpej Exp $";
+ #endif
+ 
+ #include "os.h"
+ #include "common.h"
++#include "device.h"
+ #include "mopdef.h"
+ #include "pf.h"
+ 
+ struct	if_info *iflist;		/* Interface List		*/
+ 
+-void mopReadDL();
+-void mopReadRC();
+-#ifdef NO__P
+-int  mopOpenDL(/* struct if_info *, int */);
+-int  mopOpenRC(/* struct if_info *, int */);
+-#else
+-int  mopOpenDL(struct if_info *, int);
+-int  mopOpenRC(struct if_info *, int);
+-#endif
+-int pfTrans();
+-int pfInit();
+-int pfWrite();
++void	deviceOpen __P((char *, u_short, int));
+ 
+ #ifdef	DEV_NEW_CONF
+ /*
+@@ -83,7 +76,6 @@
+ 	if (ioctl(fd, SIOCGIFCONF, (caddr_t)&ifc) < 0 ||
+ 	    ifc.ifc_len < sizeof(struct ifreq)) {
+ 		syslog(LOG_ERR, "deviceEthAddr: SIOGIFCONF: %m");
+-		(void) close(fd);
+ 		exit(1);
+ 	}
+ 	ifr = ifc.ifc_req;
+@@ -95,14 +87,12 @@
+ 		    sdl->sdl_alen != 6)
+ 			continue;
+ 		if (!strncmp(ifr->ifr_name, ifname, sizeof(ifr->ifr_name))) {
+-			bcopy((caddr_t)LLADDR(sdl), (caddr_t)eaddr, 6);
+-			(void) close(fd);
++			memmove((caddr_t)eaddr, (caddr_t)LLADDR(sdl), 6);
+ 			return;
+ 		}
+ 	}
+ 
+ 	syslog(LOG_ERR, "deviceEthAddr: Never saw interface `%s'!", ifname);
+-	(void) close(fd);
+ 	exit(1);
+ }
+ #endif	/* DEV_NEW_CONF */
+@@ -146,14 +136,11 @@
+ 		p->iopen   = tmp.iopen;
+ 		p->write   = pfWrite;
+ 		p->read    = tmp.read;
+-		bzero((char *)p->eaddr,sizeof(p->eaddr));
++		memset((char *)p->eaddr, 0, sizeof(p->eaddr));
+ 		p->fd      = tmp.fd;
+-		p->trans   = trans;
+ 
+ #ifdef	DEV_NEW_CONF
+ 		deviceEthAddr(p->if_name,&p->eaddr[0]);
+-#elif	defined(__linux__)
+-		pfEthAddr(0, p->if_name,&p->eaddr[0]);
+ #else
+ 		p->eaddr[0]= tmp.eaddr[0];
+ 		p->eaddr[1]= tmp.eaddr[1];
+@@ -163,16 +150,6 @@
+ 		p->eaddr[5]= tmp.eaddr[5];
+ #endif	/* DEV_NEW_CONF */
+ 
+-		switch (proto) {
+-		case MOP_K_PROTO_RC:
+-			pfAddMulti(-1,p->if_name,&rc_mcst[0]);
+-			break;
+-		case MOP_K_PROTO_DL:
+-			pfAddMulti(-1,p->if_name,&dl_mcst[0]);
+-			break;
+-		default:
+-			break;
+-		}
+ 	}
+ }
+ 
+@@ -230,26 +207,17 @@
+ 
+ 	switch (trans) {
+ 	case TRANS_ETHER:
++		deviceOpen(interface,MOP_K_PROTO_RC,TRANS_ETHER);
++		break;
+ 	case TRANS_8023:
+-	case TRANS_FDDI_8021H:
+-	case TRANS_FDDI_8022:
+-		deviceOpen(interface, MOP_K_PROTO_RC, trans);
++		deviceOpen(interface,MOP_K_PROTO_RC,TRANS_8023);
+ 		break;
+ 	case TRANS_ETHER + TRANS_8023:
+ 		deviceOpen(interface, MOP_K_PROTO_RC, TRANS_ETHER);
+ 		deviceOpen(interface, MOP_K_PROTO_RC, TRANS_8023);
+ 		break;
+-	case TRANS_FDDI_8021H + TRANS_FDDI_8022:
+-		deviceOpen(interface, MOP_K_PROTO_RC, TRANS_FDDI_8021H);
+-		deviceOpen(interface, MOP_K_PROTO_RC, TRANS_FDDI_8022);
+-		break;
+ 	case TRANS_ETHER + TRANS_8023 + TRANS_AND:
+-		deviceOpen(interface, MOP_K_PROTO_RC,
+-			   TRANS_ETHER + TRANS_8023);
+-		break;
+-	case TRANS_FDDI_8021H + TRANS_FDDI_8022 + TRANS_AND:
+-		deviceOpen(interface, MOP_K_PROTO_RC,
+-			   TRANS_FDDI_8021H + TRANS_FDDI_8022);
++		deviceOpen(interface,MOP_K_PROTO_RC,TRANS_ETHER+TRANS_8023);
+ 		break;
+ 	}
+ #endif
+@@ -259,26 +227,17 @@
+ 
+ 	switch (trans) {
+ 	case TRANS_ETHER:
++		deviceOpen(interface,MOP_K_PROTO_DL,TRANS_ETHER);
++		break;
+ 	case TRANS_8023:
+-	case TRANS_FDDI_8021H:
+-	case TRANS_FDDI_8022:
+-		deviceOpen(interface, MOP_K_PROTO_DL, trans);
++		deviceOpen(interface,MOP_K_PROTO_DL,TRANS_8023);
+ 		break;
+ 	case TRANS_ETHER + TRANS_8023:
+ 		deviceOpen(interface, MOP_K_PROTO_DL, TRANS_ETHER);
+ 		deviceOpen(interface, MOP_K_PROTO_DL, TRANS_8023);
+ 		break;
+-	case TRANS_FDDI_8021H + TRANS_FDDI_8022:
+-		deviceOpen(interface, MOP_K_PROTO_DL, TRANS_FDDI_8021H);
+-		deviceOpen(interface, MOP_K_PROTO_DL, TRANS_FDDI_8022);
+-		break;
+ 	case TRANS_ETHER + TRANS_8023 + TRANS_AND:
+-		deviceOpen(interface, MOP_K_PROTO_DL,
+-			   TRANS_ETHER + TRANS_8023);
+-		break;
+-	case TRANS_FDDI_8021H + TRANS_FDDI_8022 + TRANS_AND:
+-		deviceOpen(interface, MOP_K_PROTO_DL,
+-			   TRANS_FDDI_8021H + TRANS_FDDI_8022);
++		deviceOpen(interface,MOP_K_PROTO_DL,TRANS_ETHER+TRANS_8023);
+ 		break;
+ 	}
+ #endif
+@@ -344,7 +303,7 @@
+ 	ifc.ifc_len = sizeof ibuf;
+ 	ifc.ifc_buf = (caddr_t)ibuf;
+ 	if (ioctl(fd, SIOCGIFCONF, (char *)&ifc) < 0 ||
+-	    ifc.ifc_len < (int)sizeof(struct ifreq)) {
++	    ifc.ifc_len < sizeof(struct ifreq)) {
+ 		syslog(LOG_ERR, "deviceInitAll: old SIOCGIFCONF: %m");
+ 		exit(1);
+ 	}
+diff -rwu mopd-2.5.3.patched/common/device.h mopd-2.5.4.orig/common/device.h
+--- mopd-2.5.3.patched/common/device.h	1995-09-28 11:51:48.000000000 +0100
++++ mopd-2.5.4.orig/common/device.h	2000-08-08 22:48:05.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: device.h,v 1.2 1997/03/25 03:07:07 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -26,27 +28,26 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
++ *	$NetBSD: device.h,v 1.2 1997/03/25 03:07:07 thorpej Exp $
+  *
+  */
+ 
+ #ifndef _DEVICE_H_
+ #define _DEVICE_H_
+ 
+-#ifdef NO__P
+-#ifdef	DEV_NEW_CONF
+-void	deviceEthAddr (/* char *,u_char * */);
+-#endif
+-void	deviceInitOne (/* char * */);
+-void	deviceInitAll (/* void */);
+-#else
+ __BEGIN_DECLS
+ #ifdef	DEV_NEW_CONF
+ void	deviceEthAddr __P((char *,u_char *));
+ #endif
+ void	deviceInitOne __P((char *));
+ void	deviceInitAll __P((void));
++
++/* from loop-bsd.c */
++void	Loop __P((void));
++int	mopOpenDL __P((struct if_info *, int));
++int	mopOpenRC __P((struct if_info *, int));
++void	mopReadDL __P((void));
++void	mopReadRC __P((void));
+ __END_DECLS
+-#endif
+ 
+ #endif _DEVICE_H_
+Only in mopd-2.5.3.patched/common: device.o
+diff -rwu mopd-2.5.3.patched/common/dl.c mopd-2.5.4.orig/common/dl.c
+--- mopd-2.5.3.patched/common/dl.c	2003-03-27 09:14:41.000000000 +0000
++++ mopd-2.5.4.orig/common/dl.c	2000-08-09 19:36:41.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: dl.c,v 1.3 1997/10/16 23:24:31 lukem Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,14 +29,16 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++static char rcsid[]="$NetBSD: dl.c,v 1.3 1997/10/16 23:24:31 lukem Exp $";
+ #endif
+ 
+ #include "os.h"
++#include "dl.h"
+ #include "get.h"
+-#include "print.h"
+ #include "mopdef.h"
++#include "print.h"
+ 
+ void
+ mopDumpDL(fd, pkt, trans)
+@@ -43,33 +47,26 @@
+ 	int	 trans;
+ {
+ 	int	i,index = 0;
+-	u_int	tmpl;
++	u_int32_t tmpl;
+ 	u_char	tmpc,c,program[257],code,*ucp;
+-	int	len,tmps,moplen;
++	u_short	len,tmps,moplen;
+ 
+ 	len = mopGetLength(pkt, trans);
+ 
+ 	switch (trans) {
+-	case TRANS_ETHER:
+-		index = 16;
+-		moplen = len;
+-		break;
+ 	case TRANS_8023:
+ 		index = 22;
+ 		moplen = len - 8;
+ 		break;
+-	case TRANS_FDDI_8021H:
+-	case TRANS_FDDI_8022:
+-		index = 23;
+-		moplen = len;
+-		break;
+ 	default:
+-		moplen = 0;
++		index = 16;
++		moplen = len;
+ 	}
+-	if (moplen < 1)				/* broken packet */
+-		return;
+ 	code = mopGetChar(pkt,&index);
+ 	
++        /* see above, if (len < 8) then moplen ends up around 65535 */
++        if (moplen > len) moplen = len;
++   
+ 	switch (code) {
+ 	case MOP_K_CODE_MLT:
+ 		
+diff -rwu mopd-2.5.3.patched/common/dl.h mopd-2.5.4.orig/common/dl.h
+--- mopd-2.5.3.patched/common/dl.h	1995-10-13 20:29:04.000000000 +0100
++++ mopd-2.5.4.orig/common/dl.h	2000-08-08 22:48:06.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: dl.h,v 1.2 1997/03/25 03:07:10 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -26,19 +28,15 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
++ *	$NetBSD: dl.h,v 1.2 1997/03/25 03:07:10 thorpej Exp $
+  *
+  */
+ 
+ #ifndef _DL_H_
+ #define _DL_H_
+ 
+-#ifdef NO__P
+-void	mopDumpDL       (/* FILE *, u_char *, int */);
+-#else
+ __BEGIN_DECLS
+ void	mopDumpDL       __P((FILE *, u_char *, int));
+ __END_DECLS
+-#endif
+ 
+ #endif _DL_H_
+Only in mopd-2.5.3.patched/common: dl.o
+diff -rwu mopd-2.5.3.patched/common/get.c mopd-2.5.4.orig/common/get.c
+--- mopd-2.5.3.patched/common/get.c	2003-03-27 09:14:41.000000000 +0000
++++ mopd-2.5.4.orig/common/get.c	2000-08-08 23:43:28.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: get.c,v 1.2 1997/03/25 03:07:15 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,18 +29,19 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++static char rcsid[]="$NetBSD: get.c,v 1.2 1997/03/25 03:07:15 thorpej Exp $";
+ #endif
+ 
+-#include <sys/types.h>
+-#include <netinet/in.h>
++#include "os.h"
++#include "get.h"
+ #include "mopdef.h"
+ 
+ u_char
+ mopGetChar(pkt, index)
+-	register u_char *pkt;
+-	register int    *index;
++	u_char *pkt;
++	int    *index;
+ {
+         u_char ret;
+ 
+@@ -49,8 +52,8 @@
+ 
+ u_short
+ mopGetShort(pkt, index)
+-	register u_char *pkt;
+-	register int    *index;
++	u_char *pkt;
++	int    *index;
+ {
+         u_short ret;
+ 	
+@@ -59,12 +62,12 @@
+ 	return(ret);
+ }
+ 
+-u_int
++u_int32_t
+ mopGetLong(pkt, index)
+-	register u_char *pkt;
+-	register int    *index;
++	u_char *pkt;
++	int    *index;
+ {
+-        u_long ret;
++        u_int32_t ret;
+ 	
+ 	ret = pkt[*index] +
+ 	      pkt[*index+1]*0x100 +
+@@ -76,8 +79,8 @@
+ 
+ void
+ mopGetMulti(pkt, index, dest, size)
+-	register u_char *pkt,*dest;
+-	register int    *index,size;
++	u_char *pkt,*dest;
++	int    *index,size;
+ {
+ 	int i;
+ 
+@@ -95,31 +98,16 @@
+ {
+ 	u_short	*ptype;
+ 	
+-	if ((trans & (TRANS_ETHER + TRANS_8023))) {
++	if (trans == 0) {
+ 		ptype = (u_short *)(pkt+12);
+ 		if (ntohs(*ptype) < 1600) {
+-			trans &= TRANS_8023;
++			trans = TRANS_8023;
+ 		} else {
+-			trans &= TRANS_ETHER;
++			trans = TRANS_ETHER;
+ 		}
+-		return(trans);
+-	}
+-	if ((trans & (TRANS_FDDI_8021H + TRANS_FDDI_8022))) {
+-		if (*pkt >= MOP_K_FDDI_FC_MIN && *pkt <= MOP_K_FDDI_FC_MAX) {
+-			if (!bcmp((char *)(pkt+16), (char *)dl_802_proto, 3)) {
+-				trans &= TRANS_FDDI_8022;
+-				return(trans);
+ 			}
+-			if (!bcmp((char *)(pkt+16),
+-				  (char *)dl_8021h_proto, 3)) {
+-				trans &= TRANS_FDDI_8021H;
+ 				return(trans);
+ 			}
+-		}
+-		return(0);
+-	}
+-	return(0);
+-}
+ 
+ void
+ mopGetHeader(pkt, index, dst, src, proto, len, trans)
+@@ -127,35 +115,23 @@
+ 	int	*index, *len, trans;
+ 	u_short	*proto;
+ {
+-	switch(trans) {
+-	case TRANS_ETHER:
+ 		*dst = pkt;
+ 		*src = pkt + 6;
+ 		*index = *index + 12;
++
++	switch(trans) {
++	case TRANS_ETHER:
+ 		*proto = (u_short)(pkt[*index]*256 + pkt[*index+1]);
+ 		*index = *index + 2;
+ 		*len   = (int)(pkt[*index+1]*256 + pkt[*index]);
+ 		*index = *index + 2;
+ 		break;
+ 	case TRANS_8023:
+-		*dst = pkt;
+-		*src = pkt + 6;
+-		*index = *index + 12;
+ 		*len   = (int)(pkt[*index]*256 + pkt[*index+1]);
+ 		*index = *index + 8;
+ 		*proto = (u_short)(pkt[*index]*256 + pkt[*index+1]);
+ 		*index = *index + 2;
+ 		break;
+-	case TRANS_FDDI_8021H:
+-	case TRANS_FDDI_8022:
+-		*dst = pkt + 1;
+-		*src = pkt + 7;
+-		*index = *index + 19;
+-		*proto = (u_short)(pkt[*index]*256 + pkt[*index+1]);
+-		*index = *index + 2;
+-		*len   = (int)(pkt[*index+1]*256 + pkt[*index]);
+-		*index = *index + 2;
+-		break;
+ 	}
+ }
+ 
+@@ -171,10 +147,6 @@
+ 	case TRANS_8023:
+ 		return(pkt[12]*256 + pkt[13]);
+ 		break;
+-	case TRANS_FDDI_8021H:
+-	case TRANS_FDDI_8022:
+-		return(pkt[22]*256 + pkt[21]);
+-		break;
+ 	}
+ 	return(0);
+ }
+diff -rwu mopd-2.5.3.patched/common/get.h mopd-2.5.4.orig/common/get.h
+--- mopd-2.5.3.patched/common/get.h	2003-03-27 09:13:20.000000000 +0000
++++ mopd-2.5.4.orig/common/get.h	2000-08-08 22:48:06.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: get.h,v 1.2 1997/03/25 03:07:16 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -26,33 +28,22 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
++ *	$NetBSD: get.h,v 1.2 1997/03/25 03:07:16 thorpej Exp $
+  *
+  */
+ 
+ #ifndef _GET_H_
+ #define _GET_H_
+ 
+-#ifdef NO__P
+-u_char	mopGetChar   (/* u_char *, int * */);
+-u_short	mopGetShort  (/* u_char *, int * */);
+-u_int 	mopGetLong   (/* u_char *, int * */);
+-void	mopGetMulti  (/* u_char *, int *,u_char *,int */);
+-int	mopGetTrans  (/* u_char *, int */);
+-void	mopGetHeader (/* u_char *, int *, u_char **, u_char **, u_short *,
+-			 int *, int */);
+-u_short	mopGetLength (/* u_char *, int */);
+-#else
+ __BEGIN_DECLS
+ u_char	mopGetChar   __P((u_char *,int *));
+ u_short	mopGetShort  __P((u_char *,int *));
+-u_int 	mopGetLong   __P((u_char *,int *));
++u_int32_t	mopGetLong __P((u_char *, int *));
+ void	mopGetMulti  __P((u_char *,int *,u_char *,int));
+ int	mopGetTrans  __P((u_char *, int));
+-void	mopGetHeader __P((u_char *, int *, u_char **, u_char **, u_short *,
+-			  int *, int));
++void		mopGetHeader __P((u_char *, int *, u_char **, u_char **,
++		    u_short *, int *, int));
+ u_short	mopGetLength __P((u_char *, int));
+ __END_DECLS
+-#endif
+ 
+-#endif _GET_H_
++#endif /* _GET_H_ */
+Only in mopd-2.5.3.patched/common: get.o
+Only in mopd-2.5.3.patched/common: libcommon.a
+diff -rwu mopd-2.5.3.patched/common/loop-bsd.c mopd-2.5.4.orig/common/loop-bsd.c
+--- mopd-2.5.3.patched/common/loop-bsd.c	2003-03-27 09:13:28.000000000 +0000
++++ mopd-2.5.4.orig/common/loop-bsd.c	2000-08-08 22:48:06.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: loop-bsd.c,v 1.4 1998/02/03 04:51:29 perry Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,24 +29,24 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++__RCSID("$NetBSD: loop-bsd.c,v 1.4 1998/02/03 04:51:29 perry Exp $");
+ #endif
+ 
++#include <errno.h>
+ #include <stdlib.h>
+ #include <strings.h>
+ #include <unistd.h>
+ #if defined(__bsdi__) || defined(__FreeBSD__) || defined(__NetBSD__)
+ #include <sys/time.h>
+ #endif
+-#if !defined(__linux__)
+ #include <net/bpf.h>
+-#endif
+ #include <sys/ioctl.h>
+-#include <sys/errno.h>
+ 
+ #include "os.h"
+ #include "common.h"
++#include "device.h"
+ #include "mopdef.h"
+ 
+ int
+@@ -112,16 +114,12 @@
+ 		syslog(LOG_ERR, "no interfaces");
+ 		exit(0);
+ 	}
+-#ifndef __linux__
+ 	if (iflist->fd != -1) {
+ 		if (ioctl(iflist->fd, BIOCGBLEN, (caddr_t) & bufsize) < 0) {
+ 			syslog(LOG_ERR, "BIOCGBLEN: %m");
+ 			exit(0);
+ 	        }
+ 	}
+-#else
+-	bufsize = 8192;
+-#endif
+ 	buf = (u_char *) malloc((unsigned) bufsize);
+ 	if (buf == 0) {
+ 		syslog(LOG_ERR, "malloc: %m");
+@@ -141,8 +139,8 @@
+ 	}
+ 	while (1) {
+ 		listeners = fds;
+-		if (select(maxfd + 1, &listeners, (fd_set *) 0,
+-			(fd_set *) 0, (struct timeval *) 0) < 0) {
++		if (select(maxfd + 1, &listeners, (struct fd_set *) 0,
++			(struct fd_set *) 0, (struct timeval *) 0) < 0) {
+ 			syslog(LOG_ERR, "select: %m");
+ 			exit(0);
+ 		}
+@@ -172,20 +170,14 @@
+ #define bhp ((struct bpf_hdr *)bp)
+ 			bp = buf;
+ 			ep = bp + cc;
+-#ifndef __linux__
+ 			while (bp < ep) {
+-				register int caplen, hdrlen;
++				int caplen, hdrlen;
+ 
+ 				caplen = bhp->bh_caplen;
+ 				hdrlen = bhp->bh_hdrlen;
+ 				mopProcess(ii, bp + hdrlen);
+ 				bp += BPF_WORDALIGN(hdrlen + caplen);
+ 			}
+-#else
+-			if (bp < ep) {
+-				mopProcess(ii,buf);
+-			}
+-#endif
+ 		}
+ 	}
+ }
+Only in mopd-2.5.3.patched/common: loop-bsd.o
+Only in mopd-2.5.4.orig/common: loop-linux2.c
+diff -rwu mopd-2.5.3.patched/common/mopdef.c mopd-2.5.4.orig/common/mopdef.c
+--- mopd-2.5.3.patched/common/mopdef.c	2003-03-27 09:14:41.000000000 +0000
++++ mopd-2.5.4.orig/common/mopdef.c	2000-08-08 23:43:49.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: mopdef.c,v 1.2 1997/03/25 03:07:19 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1995 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,8 +29,9 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++static char rcsid[]="$NetBSD: mopdef.c,v 1.2 1997/03/25 03:07:19 thorpej Exp $";
+ #endif
+ 
+ #define MOPDEF_SURPESS_EXTERN
+@@ -39,10 +42,8 @@
+ char dl_802_proto[5] = MOP_K_PROTO_802_DL; /* MOP Dump/Load 802.2      */
+ char rc_802_proto[5] = MOP_K_PROTO_802_RC; /* MOP Remote Console 802.2 */
+ char lp_802_proto[5] = MOP_K_PROTO_802_LP; /* Loopback 802.2           */
+-char dl_8021h_proto[5] = MOP_K_PROTO_8021H_DL; /* MOP Dump/Load 802.1H */
+-char rc_8021h_proto[5] = MOP_K_PROTO_8021H_RC; /* MOP Remote Console 802.1H */
+-char lp_8021h_proto[5] = MOP_K_PROTO_8021H_LP; /* Loopback 802.1H      */
+ 
++#if 0
+ int
+ mopdef_dummy()
+ {
+@@ -50,3 +51,4 @@
+ 	return(dl_mcst[0]-rc_mcst[0]-
+ 	       lp_802_proto[1]-rc_802_proto[1]-lp_802_proto[1]);
+ }
++#endif
+diff -rwu mopd-2.5.3.patched/common/mopdef.h mopd-2.5.4.orig/common/mopdef.h
+--- mopd-2.5.3.patched/common/mopdef.h	2003-03-27 09:14:41.000000000 +0000
++++ mopd-2.5.4.orig/common/mopdef.h	2000-08-08 22:48:06.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD$	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -26,7 +28,7 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
++ *	$NetBSD: mopdef.h,v 1.1.1.1 1997/03/16 22:23:36 cjs Exp $
+  *
+  */
+ 
+@@ -41,24 +43,13 @@
+ #define MOP_K_PROTO_802_RC	{ 0x08, 0x00, 0x2b, 0x60, 0x02 }
+ #define MOP_K_PROTO_802_LP	{ 0x08, 0x00, 0x2b, 0x90, 0x00 }
+ 
+-#define MOP_K_PROTO_8021H_DL	{ 0x00, 0x00, 0x00, 0x60, 0x01 }
+-#define MOP_K_PROTO_8021H_RC	{ 0x00, 0x00, 0x00, 0x60, 0x02 }
+-#define MOP_K_PROTO_8021H_LP	{ 0x00, 0x00, 0x00, 0x90, 0x00 }
+-
+ #define MOP_K_PROTO_802_DSAP	0xaa
+ #define MOP_K_PROTO_802_SSAP	0xaa
+ #define MOP_K_PROTO_802_CNTL	0x03
+ 
+-#define MOP_K_FDDI_FC_MIN	0x50	/* Accepted frame types: async LLC */
+-#define MOP_K_FDDI_FC_MAX	0x57
+-
+-#define MOP_K_FDDI_FC_DEF	0x54	/* Sent frame type: async4 LLC */
+-
+ #define TRANS_ETHER		1	/* Packet in Ethernet format */
+ #define TRANS_8023		2	/* Packet in 802.3 format */
+-#define TRANS_FDDI_8021H	4	/* Packet in FDDI 802.1H format */
+-#define TRANS_FDDI_8022		8	/* Packet in FDDI 802.2 format */
+-#define TRANS_AND		0x1000	/* All formats specified */
++#define TRANS_AND		0x1000	/* Both Ethernet and 802.3 */
+ 
+ /* The following constants are defined in module MOPDEF.SDL in MOM */
+ 
+@@ -202,9 +193,6 @@
+ extern char dl_802_proto[];
+ extern char rc_802_proto[];
+ extern char lp_802_proto[];
+-extern char dl_8021h_proto[];
+-extern char rc_8021h_proto[];
+-extern char lp_8021h_proto[];
+ #endif	MOPDEF_SUPRESS_EXTERN
+ 
+ #endif _MOPDEF_H_
+Only in mopd-2.5.3.patched/common: mopdef.o
+diff -rwu mopd-2.5.3.patched/common/nma.c mopd-2.5.4.orig/common/nma.c
+--- mopd-2.5.3.patched/common/nma.c	2003-03-27 09:05:58.000000000 +0000
++++ mopd-2.5.4.orig/common/nma.c	2000-08-08 23:44:09.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: nma.c,v 1.2 1997/03/25 03:07:22 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1995 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,11 +29,13 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++static char rcsid[]="$NetBSD: nma.c,v 1.2 1997/03/25 03:07:22 thorpej Exp $";
+ #endif
+ 
+-#include <stddef.h>
++#include "os.h"
++#include "nma.h"
+ #include "nmadef.h"
+ 
+ struct commDev {
+@@ -221,4 +225,3 @@
+ 
+ 	return(current->name);
+ }
+-
+diff -rwu mopd-2.5.3.patched/common/nma.h mopd-2.5.4.orig/common/nma.h
+--- mopd-2.5.3.patched/common/nma.h	1995-09-28 14:38:42.000000000 +0100
++++ mopd-2.5.4.orig/common/nma.h	2000-08-08 22:48:06.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: nma.h,v 1.2 1997/03/25 03:07:23 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1995 Mats O Jansson.  All rights reserved.
+  *
+@@ -26,21 +28,16 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
++ *	$NetBSD: nma.h,v 1.2 1997/03/25 03:07:23 thorpej Exp $
+  *
+  */
+ 
+ #ifndef _NMA_H_
+ #define _NMA_H_
+ 
+-#ifdef NO__P
+-char	*nmaGetShort  (/* int */);
+-char	*nmaGetDevice (/* int */);
+-#else
+ __BEGIN_DECLS
+ char	*nmaGetShort  __P((int));
+ char	*nmaGetDevice __P((int));
+ __END_DECLS
+-#endif
+ 
+ #endif _NMA_H_
+Only in mopd-2.5.3.patched/common: nma.o
+diff -rwu mopd-2.5.3.patched/common/nmadef.h mopd-2.5.4.orig/common/nmadef.h
+--- mopd-2.5.3.patched/common/nmadef.h	1995-07-10 21:06:43.000000000 +0100
++++ mopd-2.5.4.orig/common/nmadef.h	2000-08-08 22:48:06.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD$	*/
++
+ /*
+  * Copyright (c) 1995 Mats O Jansson.  All rights reserved.
+  *
+@@ -26,7 +28,7 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
++ *	$NetBSD: nmadef.h,v 1.1.1.1 1997/03/16 22:23:37 cjs Exp $
+  *
+  */
+ 
+diff -rwu mopd-2.5.3.patched/common/os.h mopd-2.5.4.orig/common/os.h
+--- mopd-2.5.3.patched/common/os.h	2003-03-27 09:10:13.000000000 +0000
++++ mopd-2.5.4.orig/common/os.h	2000-08-08 23:34:01.000000000 +0100
+@@ -1,5 +1,7 @@
++/*	$OpenBSD: os-linux2.h,v 1.1 1999/03/27 14:31:22 maja Exp $ */
++
+ /*
+- * Copyright (c) 1994-95 Mats O Jansson.  All rights reserved.
++ * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions
+@@ -26,27 +28,11 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
+- *
++ * @(#) $OpenBSD: os-linux2.h,v 1.1 1999/03/27 14:31:22 maja Exp $
+  */
+ 
+-#ifndef _OS_H_
+-#define _OS_H_
+-
+-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+-#define DEV_NEW_CONF
+-#endif
+-
+-#if defined(__linux__)
+-#define SETPGRP_NOPARAM
+-#endif
+-
+ #include <stdio.h>
+ 
+-#ifndef FILENAME_MAX
+-#define FILENAME_MAX 255			/* SunOS 4 is missing it */
+-#endif
+-
+ #include <syslog.h>
+ #include <signal.h>
+ #include <sys/types.h>
+@@ -54,27 +40,14 @@
+ #include <errno.h>
+ #include <sys/socket.h>
+ #include <net/if.h>
+-#ifdef DEV_NEW_CONF
+-#include <net/if_dl.h>
+-#include <net/if_types.h>
+-#endif
+ #include <sys/ioctl.h>
+ #include <stdlib.h>
+ #include <sys/time.h>
+ #include <time.h>
+ #include <fcntl.h>
+-#if defined(sun)
+-#include <string.h>
+-#else
+-#include <strings.h>
+-#endif
+ #include <unistd.h>
++#include <string.h>
+ 
+-#include <sys/utsname.h>
+-#include <sys/param.h>
+-
+-#if defined(sun)
+-typedef int ssize_t;
+-#endif
++#define LINUX2_PF
++#define SETPGRP_NOPARAM
+ 
+-#endif _OS_H_
+Only in mopd-2.5.3.patched/common: pf-linux.c
+Only in mopd-2.5.3.patched/common: pf-linux.o
+Only in mopd-2.5.4.orig/common: pf-linux2.c
+diff -rwu mopd-2.5.3.patched/common/pf.c mopd-2.5.4.orig/common/pf.c
+--- mopd-2.5.3.patched/common/pf.c	2003-03-27 09:13:07.000000000 +0000
++++ mopd-2.5.4.orig/common/pf.c	2000-08-08 22:48:07.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: pf.c,v 1.4 1997/10/16 23:24:55 lukem Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  * Copyright (c) 1990 The Regents of the University of California.
+@@ -31,43 +33,24 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef __linux__
+-
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++__RCSID("$NetBSD: pf.c,v 1.4 1997/10/16 23:24:55 lukem Exp $");
+ #endif
+ 
+-#include <stdio.h>
+-#include <unistd.h>
+-#include <sys/types.h>
+-#include <sys/time.h>
+-#include <sys/ioctl.h>
+-#include <sys/file.h>
+-#include <sys/socket.h>
+-#include <sys/uio.h>
+-#include <net/if.h>
++#include "os.h"
+ 
++#include <sys/uio.h>
+ #include <net/bpf.h>
+-#include <sys/errno.h>
+-
+-#include <netinet/in.h>
+-#include <netinet/if_ether.h>
+-
+-#include <netdb.h>
+-#include <ctype.h>
+-#include <strings.h>
+-
+-#include <syslog.h>
+-#include <varargs.h>
+ 
+ #include "mopdef.h"
++#include "pf.h"
+ 
+ /*
+  * Variables
+  */
+ 
+-extern int errno;
+-extern int nomulti;
++extern int promisc;
+ 
+ /*
+  * Return information to device.c how to open device.
+@@ -121,7 +104,7 @@
+ 	} while (fd < 0 && errno == EBUSY);
+ 
+ 	if (fd < 0) {
+-      		syslog(LOG_ERR,"pfInit: open bpf %m");
++      		syslog(LOG_ERR,"pfInit: open %s: %m", device);
+ 		return(-1);
+ 	}
+   
+@@ -146,8 +129,7 @@
+       		syslog(LOG_ERR,"pfInit: %s is not ethernet", device);
+ 		return(-1);
+ 	}
+-	if (!nomulti) {
+-		syslog(LOG_WARNING,"pfInit: using promiscuous mode for multicast reception");
++	if (promisc) {
+ 		/* Set promiscuous mode. */
+ 		if (ioctl(fd, BIOCPROMISC, (caddr_t)0) < 0) {
+       			syslog(LOG_ERR,"pfInit: BIOCPROMISC: %m");
+@@ -180,7 +162,7 @@
+ 	strcpy(ifr.ifr_name, interface);
+ 
+ 	ifr.ifr_addr.sa_family = AF_UNSPEC;
+-	bcopy(addr, ifr.ifr_addr.sa_data, 6);
++	memmove(ifr.ifr_addr.sa_data, addr, 6);
+ 	
+ 	/*
+ 	 * open a socket, temporarily, to use for SIOC* ioctls
+@@ -215,7 +197,7 @@
+ 	strcpy(ifr.ifr_name, interface);
+ 	
+ 	ifr.ifr_addr.sa_family = AF_UNSPEC;
+-	bcopy(addr, ifr.ifr_addr.sa_data, 6);
++	memmove(ifr.ifr_addr.sa_data, addr, 6);
+ 	
+ 	/*
+ 	 * open a socket, temporarily, to use for SIOC* ioctls
+@@ -280,4 +262,3 @@
+ 	return(-1);
+ }
+ 
+-#endif /* !__linux__ */
+diff -rwu mopd-2.5.3.patched/common/pf.h mopd-2.5.4.orig/common/pf.h
+--- mopd-2.5.3.patched/common/pf.h	2003-03-27 09:13:20.000000000 +0000
++++ mopd-2.5.4.orig/common/pf.h	2000-08-08 22:48:07.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: pf.h,v 1.2 1997/03/25 03:07:29 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -26,31 +28,21 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
++ *	$NetBSD: pf.h,v 1.2 1997/03/25 03:07:29 thorpej Exp $
+  *
+  */
+ 
+ #ifndef _PF_H_
+ #define _PF_H_
+ 
+-#ifdef NO__P
+-int	pfTrans	   (/* char * */);
+-int	pfInit     (/* char *, int, u_short, int */);
+-int	pfEthAddr  (/* int, char *, u_char * */);
+-int	pfAddMulti (/* int, char *, char * */);
+-int	pfDelMulti (/* int, char *, char * */);
+-int	pfRead     (/* int, u_char *, int */);
+-int	pfWrite    (/* int, u_char *, int, int  */);
+-#else
+ __BEGIN_DECLS
+ int	pfTrans	   __P((char *));
+ int	pfInit     __P((char *, int, u_short, int));
+-int	pfEthAddr  __P((int, char *, u_char *));
++int	pfEthAddr  __P((int, u_char *));
+ int	pfAddMulti __P((int, char *, char *));
+ int	pfDelMulti __P((int, char *, char *));
+ int	pfRead     __P((int, u_char *, int));
+ int	pfWrite    __P((int, u_char *, int, int));
+ __END_DECLS
+-#endif
+ 
+ #endif _PF_H_
+Only in mopd-2.5.3.patched/common: pf.o
+diff -rwu mopd-2.5.3.patched/common/print.c mopd-2.5.4.orig/common/print.c
+--- mopd-2.5.3.patched/common/print.c	2003-03-27 09:14:41.000000000 +0000
++++ mopd-2.5.4.orig/common/print.c	2000-08-08 23:45:09.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: print.c,v 1.2 1997/03/25 03:07:30 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-96 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,19 +29,21 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++static char rcsid[]="$NetBSD: print.c,v 1.2 1997/03/25 03:07:30 thorpej Exp $";
+ #endif
+ 
+ #include <sys/types.h>
+ #include <stdio.h>
+ 
+ #include "os.h"
+-#include "mopdef.h"
+-#include "nmadef.h"
+-#include "nma.h"
+ #include "cmp.h"
+ #include "get.h"
++#include "mopdef.h"
++#include "nma.h"
++#include "nmadef.h"
++#include "print.h"
+ 
+ #define SHORT_PRINT
+ 
+@@ -145,24 +149,18 @@
+ 		}
+ 	}
+ 
+-	switch (trans) {
+-	case TRANS_ETHER:
+-		(void)fprintf(fd, "EthII ");
+-		break;
+-	case TRANS_8023:
++	if (trans == TRANS_8023) {
+ 		(void)fprintf(fd, "802.3 ");
+-		break;
+-	case TRANS_FDDI_8021H:
+-		(void)fprintf(fd, "FDDI 802.1H ");
+-		break;
+-	case TRANS_FDDI_8022:
+-		(void)fprintf(fd, "FDDI 802.2 ");
+-		break;
+ 	}
+ 
+ 	mopPrintHWA(fd, src); (void)fprintf(fd," > ");
+ 	mopPrintHWA(fd, dst);
++	if (len < 1600) {
+        	(void)fprintf(fd, " len %4d code %02x ", len, code);
++	} else {
++		(void)fprintf(fd, " len %4d code %02x ",
++			      (len % 256)*256 + (len /256), code);
++	}
+ 
+ 	switch (proto) {
+ 	case MOP_K_PROTO_DL:
+@@ -285,30 +283,37 @@
+ 	(void)fprintf(fd,"Proto        : %04x ",proto);
+ 	switch (proto) {
+ 	case MOP_K_PROTO_DL:
+-		(void)fprintf(fd, "MOP Dump/Load ");
++		switch (trans) {
++		case TRANS_8023:
++			(void)fprintf(fd, "MOP Dump/Load (802.3)\n");
+ 		break;
+-	case MOP_K_PROTO_RC:
+-		(void)fprintf(fd, "MOP Remote Console ");
++		default:
++			(void)fprintf(fd, "MOP Dump/Load\n");
++		}
+ 		break;
+-	case MOP_K_PROTO_LP:
+-		(void)fprintf(fd, "MOP Loopback ");
++	case MOP_K_PROTO_RC:
++		switch (trans) {
++		case TRANS_8023:
++			(void)fprintf(fd, "MOP Remote Console (802.3)\n");
+ 		break;
++		default:
++			(void)fprintf(fd, "MOP Remote Console\n");
+ 	}
+-	switch (trans) {
+-	case TRANS_ETHER:
+-		(void)fprintf(fd, "(EthII)");
+ 		break;
++	case MOP_K_PROTO_LP:
++		switch (trans) {
+ 	case TRANS_8023:
+-		(void)fprintf(fd, "(802.3)");
++			(void)fprintf(fd, "MOP Loopback (802.3)\n");
+ 		break;
+-	case TRANS_FDDI_8021H:
+-		(void)fprintf(fd, "(FDDI 802.1H)");
++		default:
++			(void)fprintf(fd, "MOP Loopback\n");
++		}
+ 		break;
+-	case TRANS_FDDI_8022:
+-		(void)fprintf(fd, "(FDDI 802.2)");
++	default:
++		(void)fprintf(fd, "\n");
+ 		break;
+ 	}
+-	(void)fprintf(fd, "\n");
++
+ 	
+         (void)fprintf(fd,"Length       : %04x (%d)\n",len,len);
+ }
+@@ -470,10 +475,6 @@
+ 	case TRANS_8023:
+ 		moplen = moplen + 14;
+ 		break;
+-	case TRANS_FDDI_8021H:
+-	case TRANS_FDDI_8022:
+-		moplen = moplen + 23;
+-		break;
+ 	}
+ 
+ 	itype = mopGetShort(pkt,index); 
+diff -rwu mopd-2.5.3.patched/common/print.h mopd-2.5.4.orig/common/print.h
+--- mopd-2.5.3.patched/common/print.h	1995-10-13 20:32:16.000000000 +0100
++++ mopd-2.5.4.orig/common/print.h	2000-08-08 22:48:07.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: print.h,v 1.2 1997/03/25 03:07:31 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -26,25 +28,13 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
++ *	$NetBSD: print.h,v 1.2 1997/03/25 03:07:31 thorpej Exp $
+  *
+  */
+ 
+ #ifndef _PRINT_H_
+ #define _PRINT_H_
+ 
+-#ifdef NO__P
+-void	mopPrintHWA	  (/* FILE *, u_char * */);
+-void	mopPrintBPTY	  (/* FILE *, u_char */);
+-void	mopPrintPGTY      (/* FILE *, u_char */);
+-void	mopPrintOneline   (/* FILE *, u_char *, int */);
+-void	mopPrintHeader    (/* FILE *, u_char *, int */);
+-void	mopPrintMopHeader (/* FILE *, u_char *, int */);
+-void	mopPrintDevice    (/* FILE *, u_char */);
+-void	mopPrintTime      (/* FILE *, u_char * */);
+-void	mopPrintInfo      (/* FILE *, u_char *, int *, u_short,
+-			      u_char, int */);
+-#else
+ __BEGIN_DECLS
+ void	mopPrintHWA	  __P((FILE *, u_char *));
+ void	mopPrintBPTY	  __P((FILE *, u_char));
+@@ -57,6 +47,5 @@
+ void	mopPrintInfo      __P((FILE *, u_char *, int *, u_short,
+ 			       u_char, int));
+ __END_DECLS
+-#endif
+ 
+ #endif _PRINT_H_
+Only in mopd-2.5.3.patched/common: print.o
+diff -rwu mopd-2.5.3.patched/common/put.c mopd-2.5.4.orig/common/put.c
+--- mopd-2.5.3.patched/common/put.c	2003-03-27 09:15:02.000000000 +0000
++++ mopd-2.5.4.orig/common/put.c	2000-08-08 23:45:22.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: put.c,v 1.2 1997/03/25 03:07:33 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,22 +29,19 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++static char rcsid[]="$NetBSD: put.c,v 1.2 1997/03/25 03:07:33 thorpej Exp $";
+ #endif
+ 
+-#include <stddef.h>
+-#include <sys/types.h>
+-#include <time.h>
+-#ifdef __FreeBSD__
+-#include <osreldate.h>
+-#endif
++#include "os.h"
+ #include "mopdef.h"
++#include "put.h"
+ 
+ void
+ mopPutChar(pkt, index, value)
+-	register u_char *pkt;
+-	register int    *index;
++	u_char  *pkt;
++	int     *index;
+ 	u_char   value;
+ {
+ 	pkt[*index] = value;
+@@ -51,8 +50,8 @@
+ 
+ void
+ mopPutShort(pkt, index, value)
+-	register u_char *pkt;
+-	register int    *index;
++	u_char  *pkt;
++	int     *index;
+ 	u_short  value;
+ {
+         int i;
+@@ -65,9 +64,9 @@
+ 
+ void
+ mopPutLong(pkt, index, value)
+-	register u_char *pkt;
+-	register int    *index;
+-	u_long   value;
++	u_char	       *pkt;
++	int	       *index;
++	u_int32_t	value;
+ {
+         int i;
+ 	for (i = 0; i < 4; i++) {
+@@ -79,8 +78,8 @@
+ 
+ void
+ mopPutMulti(pkt, index, value, size)
+-	register u_char *pkt,*value;
+-	register int    *index,size;
++	u_char *pkt,*value;
++	int    *index,size;
+ {
+ 	int i;
+ 
+@@ -92,8 +91,8 @@
+ 
+ void
+ mopPutTime(pkt, index, value)
+-	register u_char *pkt;
+-	register int    *index;
++	u_char *pkt;
++	int    *index;
+ 	time_t value;
+ {
+ 	time_t tnow;
+@@ -122,54 +121,44 @@
+ 
+ void
+ mopPutHeader(pkt, index, dst, src, proto, trans)
+-	register u_char *pkt;
+-	register int    *index;
+-	char	 dst[], src[];
++	u_char  *pkt;
++	int     *index;
++	u_char	 dst[], src[];
+ 	u_short	 proto;
+ 	int	 trans;
+ {
+ 	
+-	if (trans == TRANS_FDDI_8021H || trans == TRANS_FDDI_8022)
+-		mopPutChar (pkt, index, MOP_K_FDDI_FC_DEF);
+ 	mopPutMulti(pkt, index, dst, 6);
+ 	mopPutMulti(pkt, index, src, 6);
+-	if (trans == TRANS_8023)
++	if (trans == TRANS_8023) {
+ 		mopPutShort(pkt, index, 0);
+-	if (trans != TRANS_ETHER) {
+ 		mopPutChar (pkt, index, MOP_K_PROTO_802_DSAP);
+ 		mopPutChar (pkt, index, MOP_K_PROTO_802_SSAP);
+ 		mopPutChar (pkt, index, MOP_K_PROTO_802_CNTL);
+-	}
+-	if (trans == TRANS_FDDI_8021H) {
+-		mopPutChar (pkt, index, 0x00);
+-		mopPutChar (pkt, index, 0x00);
+-		mopPutChar (pkt, index, 0x00);
+-	}
+-	if (trans == TRANS_8023 || trans == TRANS_FDDI_8022) {
+ 		mopPutChar (pkt, index, 0x08);
+ 		mopPutChar (pkt, index, 0x00);
+ 		mopPutChar (pkt, index, 0x2b);
+ 	}
+-#if defined(__FreeBSD__) && __FreeBSD_version < 220000
+-	if (trans == TRANS_ETHER) {
+-		mopPutChar(pkt, index, (proto % 256));
+-		mopPutChar(pkt, index, (proto / 256));
+-	} else {
++#if !defined(__FreeBSD__)
+ 		mopPutChar(pkt, index, (proto / 256));
+ 		mopPutChar(pkt, index, (proto % 256));
+-	}
+ #else
++	if (trans == TRANS_8023) {
+ 	mopPutChar(pkt, index, (proto / 256));
+ 	mopPutChar(pkt, index, (proto % 256));
++	} else {
++		mopPutChar(pkt, index, (proto % 256));
++		mopPutChar(pkt, index, (proto / 256));
++	}
+ #endif
+-	if (trans != TRANS_8023)
++	if (trans == TRANS_ETHER)
+ 		mopPutShort(pkt, index, 0);
+ 
+ }
+ 
+ void
+ mopPutLength(pkt, trans, len)
+-	register u_char *pkt;
++	u_char  *pkt;
+ 	int	 trans;
+ 	u_short	 len;
+ {
+@@ -183,23 +172,14 @@
+ 		break;
+ 	case TRANS_8023:
+ 		index = 12;
+-#if defined(__FreeBSD__) && __FreeBSD_version < 220000
+-		mopPutChar(pkt, &index, ((len - 14) % 256));
++#if !defined(__FreeBSD__)
+ 		mopPutChar(pkt, &index, ((len - 14) / 256));
++		mopPutChar(pkt, &index, ((len - 14) % 256));
+ #else
+-		mopPutChar(pkt, &index, ((len - 14) / 256));
+ 		mopPutChar(pkt, &index, ((len - 14) % 256));
++		mopPutChar(pkt, &index, ((len - 14) / 256));
+ #endif
+ 		break;
+-	case TRANS_FDDI_8021H:
+-	case TRANS_FDDI_8022:
+-		index = 21;
+-		mopPutChar(pkt, &index, ((len - 23) % 256));
+-		mopPutChar(pkt, &index, ((len - 23) / 256));
+-		break;
+ 	}
+ 
+ }
+-
+-
+-
+diff -rwu mopd-2.5.3.patched/common/put.h mopd-2.5.4.orig/common/put.h
+--- mopd-2.5.3.patched/common/put.h	1995-10-05 13:27:29.000000000 +0100
++++ mopd-2.5.4.orig/common/put.h	2000-08-08 22:48:07.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: put.h,v 1.2 1997/03/25 03:07:34 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -26,31 +28,21 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
++ *	$NetBSD: put.h,v 1.2 1997/03/25 03:07:34 thorpej Exp $
+  *
+  */
+ 
+ #ifndef _PUT_H_
+ #define _PUT_H_
+ 
+-#ifdef NO__P
+-void	mopPutChar   (/* u_char *, int *, u_char */);
+-void	mopPutShort  (/* u_char *, int *, u_short */);
+-void	mopPutLong   (/* u_char *, int *, u_long */);
+-void	mopPutMulti  (/* u_char *, int *, u_char *, int */);
+-void	mopPutTime   (/* u_char *, int *, time_t */);
+-void	mopPutHeader (/* u_char *, int *, u_char *, u_char *, u_short, int */);
+-void	mopPutLength (/* u_char *, int, u_short */);
+-#else
+ __BEGIN_DECLS
+ void	mopPutChar   __P((u_char *, int *, u_char));
+ void	mopPutShort  __P((u_char *, int *, u_short));
+-void	mopPutLong   __P((u_char *, int *, u_long));
++void	mopPutLong __P((u_char *, int *, u_int32_t));
+ void	mopPutMulti  __P((u_char *, int *, u_char *, int));
+ void	mopPutTime   __P((u_char *, int *, time_t));
+ void	mopPutHeader __P((u_char *, int *, u_char *, u_char *, u_short, int));
+ void	mopPutLength __P((u_char *, int, u_short));
+ __END_DECLS
+-#endif
+ 
+-#endif _PUT_H_
++#endif /* _PUT_H_ */
+Only in mopd-2.5.3.patched/common: put.o
+diff -rwu mopd-2.5.3.patched/common/rc.c mopd-2.5.4.orig/common/rc.c
+--- mopd-2.5.3.patched/common/rc.c	2003-03-27 09:14:41.000000000 +0000
++++ mopd-2.5.4.orig/common/rc.c	2000-08-09 19:36:26.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: rc.c,v 1.2 1997/03/25 03:07:35 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,14 +29,16 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++static char rcsid[]="$NetBSD: rc.c,v 1.2 1997/03/25 03:07:35 thorpej Exp $";
+ #endif
+ 
+ #include "os.h"
+ #include "get.h"
+-#include "print.h"
+ #include "mopdef.h"
++#include "print.h"
++#include "rc.h"
+ 
+ void
+ mopDumpRC(fd, pkt, trans)
+@@ -43,32 +47,24 @@
+ 	int	 trans;
+ {
+ 	int	i,index = 0;
+-	u_int	tmpl;
++	int32_t	tmpl;
+ 	u_char	tmpc,code,control;
+-	int	len,tmps,moplen;
++	u_short	len,tmps,moplen;
+ 
+ 	len = mopGetLength(pkt, trans);
+ 
+ 	switch (trans) {
+-	case TRANS_ETHER:
+-		index = 16;
+-		moplen = len;
+-		break;
+ 	case TRANS_8023:
+ 		index = 22;
+ 		moplen = len - 8;
+ 		break;
+-	case TRANS_FDDI_8021H:
+-	case TRANS_FDDI_8022:
+-		index = 23;
+-		moplen = len;
+-		break;
+ 	default:
+-		moplen = 0;
++		index = 16;
++		moplen = len;
+ 	}
+-	if (moplen < 1)				/* broken packet */
+-		return;
+ 	code = mopGetChar(pkt,&index);
++        /* see above, if (len < 8) then moplen ends up around 65535 */
++        if (moplen > len) moplen = len;
+ 	
+ 	switch (code) {
+ 	case MOP_K_CODE_RID:
+diff -rwu mopd-2.5.3.patched/common/rc.h mopd-2.5.4.orig/common/rc.h
+--- mopd-2.5.3.patched/common/rc.h	1995-10-13 20:26:27.000000000 +0100
++++ mopd-2.5.4.orig/common/rc.h	2000-08-08 22:48:07.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: rc.h,v 1.2 1997/03/25 03:07:36 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -26,19 +28,15 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
++ *	$NetBSD: rc.h,v 1.2 1997/03/25 03:07:36 thorpej Exp $
+  *
+  */
+ 
+ #ifndef _RC_H_
+ #define _RC_H_
+ 
+-#ifdef NO__P
+-void	mopDumpRC        (/* FILE *, u_char *, int */);
+-#else
+ __BEGIN_DECLS
+ void	mopDumpRC        __P((FILE *, u_char *, int));
+ __END_DECLS
+-#endif
+ 
+ #endif _RC_H_
+Only in mopd-2.5.3.patched/common: rc.o
+Only in mopd-2.5.3.patched/common: version.c
+Only in mopd-2.5.3.patched/common: version.o
+diff -rwu mopd-2.5.3.patched/mopa.out/Makefile mopd-2.5.4.orig/mopa.out/Makefile
+--- mopd-2.5.3.patched/mopa.out/Makefile	2003-03-27 09:05:58.000000000 +0000
++++ mopd-2.5.4.orig/mopa.out/Makefile	2000-08-08 22:48:28.000000000 +0100
+@@ -1,19 +1,5 @@
+-PROGS = mopa.out
+-OBJS = mopa.out.o
+-LIBS = ../common/libcommon.a
++#	$NetBSD: Makefile,v 1.4 1997/04/17 21:09:02 christos Exp $
+ 
+-CPPFLAGS = -I..
++PROG=	mopa.out
+ 
+-all: $(PROGS)
+-
+-mopa.out: $(OBJS) $(LIBS)
+-	$(CC) $(CFLAGS) $(LDFLAGS) -o mopa.out $(OBJS) $(LIBS)
+-
+-../common/libcommon.a:
+-	cd ../common && $(MAKE) libcommon.a
+-
+-.c.o:
+-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+-
+-clean:
+-	rm -f core $(PROGS) *.o
++.include <bsd.prog.mk>
+diff -rwu mopd-2.5.3.patched/mopa.out/mopa.out.1 mopd-2.5.4.orig/mopa.out/mopa.out.1
+--- mopd-2.5.3.patched/mopa.out/mopa.out.1	1996-08-13 19:30:58.000000000 +0100
++++ mopd-2.5.4.orig/mopa.out/mopa.out.1	2000-08-08 22:48:29.000000000 +0100
+@@ -1,3 +1,4 @@
++.\"	$NetBSD: mopa.out.1,v 1.2 1997/03/25 03:07:39 thorpej Exp $
+ .\"
+ .\" Copyright (c) 1996 Mats O Jansson.  All rights reserved.
+ .\"
+@@ -26,19 +27,17 @@
+ .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ .\"
+-.\" @(#) $Id$
+-.\"
+ .Dd August 11, 1996
+ .Dt MOPA.OUT 1
+ .Sh NAME
+ .Nm mopa.out
+ .Nd Create MOP image from a a.out file
+ .Sh SYNOPSIS
+-.Nm mopa.out
++.Nm
+ .Ar infile
+ .Ar outfile
+ .Sh DESCRIPTION
+-.Nm mopa.out
++.Nm
+ is used to convert an a.out file to a MOP-image.
+ .Pp
+ This program will check if
+@@ -47,7 +46,7 @@
+ .Xr a.out 5
+ header, and try again. 
+ .Sh BUGS
+-This program just supports the VAX machine-id for now. 
++This program only supports the VAX machine-id for now. 
+ .Sh SEE ALSO
+ .Xr a.out 5 ,
+ .Xr mopchk 1 ,
+diff -rwu mopd-2.5.3.patched/mopa.out/mopa.out.c mopd-2.5.4.orig/mopa.out/mopa.out.c
+--- mopd-2.5.3.patched/mopa.out/mopa.out.c	2003-03-27 09:05:58.000000000 +0000
++++ mopd-2.5.4.orig/mopa.out/mopa.out.c	2000-08-08 23:25:41.000000000 +0100
+@@ -1,3 +1,4 @@
++/*	$NetBSD: mopa.out.c,v 1.5 1997/10/16 23:25:09 lukem Exp $	*/
+ 
+ /* mopa.out - Convert a Unix format kernel into something that
+  * can be transfered via MOP.
+@@ -46,17 +47,22 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++__RCSID("$NetBSD: mopa.out.c,v 1.5 1997/10/16 23:25:09 lukem Exp $");
+ #endif
+ 
++#include "os.h"
++#include "common/common.h"
++#include "common/mopdef.h"
++#include "common/file.h"
+ #if defined(__NetBSD__) || defined(__OpenBSD__)
+ #include <sys/exec_aout.h>
+ #endif
+ #if defined(__FreeBSD__)
+ #include <sys/imgact_aout.h>
+ #endif
+-#if defined(__bsdi__)
++#if defined(__bsdi__) || defined(__Linux__)
+ #include <a.out.h>
+ #define NOAOUT
+ #endif
+@@ -64,35 +70,30 @@
+ #define MID_VAX 140
+ #endif
+ 
+-#include <common/os.h>
+-#include <common/common.h>
+-#include <common/mopdef.h>
+-#include <common/file.h>
+-
+ u_char header[512];		/* The VAX header we generate is 1 block. */
+ struct exec ex, ex_swap;
+ 
+ int
+ main (int argc, char **argv)
+ {
+-#ifdef NOAOUT
+-	fprintf(stderr, "%s: has no function in OS/BSD\n", argv[0]);
+-	return(1);
+-#else
+ 	FILE   *out;		/* A FILE because that is easier. */
+ 	int	i;
+ 	struct dllist dl;
+ 
++	extern char *__progname;	/* from crt0.o */
++	
++#ifdef NOAOUT
++	errx(1, "has no function in NetBSD");
++#endif	
++
+ 	if (argc != 3) {
+-		fprintf (stderr, "usage: %s kernel-in sys-out\n", argv[0]);
++		fprintf (stderr, "usage: %s kernel-in sys-out\n", __progname);
+ 		return (1);
+ 	}
+ 	
+ 	dl.ldfd = open (argv[1], O_RDONLY);
+-	if (dl.ldfd == -1) {
+-		perror (argv[1]);
+-		return (2);
+-	}
++	if (dl.ldfd == -1)
++		err(2, "open `%s'", argv[1]);
+ 	
+ 	GetFileInfo(dl.ldfd,
+ 		    &dl.loadaddr,
+@@ -102,16 +103,12 @@
+ 		    &dl.a_data,&dl.a_data_fill,
+ 		    &dl.a_bss ,&dl.a_bss_fill );
+ 
+-	if (dl.aout == -1) {
+-		fprintf(stderr,"s%: not an a.out file\n",argv[1]);
+-		return (3);
+-        }
++	if (dl.aout == -1)
++		errx(3, "`%s' is not an a.out file", argv[1]);
+ 
+-	if (dl.aout != MID_VAX) {
+-		fprintf(stderr,"%s: file is not a VAX image (mid=%d)\n",
++	if (dl.aout != MID_VAX)
++		printf("WARNING: `%s' is not a VAX image (mid=%d)\n",
+ 			argv[1],dl.aout);
+-		return (4);
+-	}
+ 
+ 	i = dl.a_text + dl.a_text_fill + dl.a_data + dl.a_data_fill +
+ 	    dl.a_bss  + dl.a_bss_fill;
+@@ -131,27 +128,20 @@
+ 	mopFilePutLX(header,0xd4+ISD_W_PAGCNT,i,2);/* Imagesize in blks.*/
+ 	
+ 	out = fopen (argv[2], "w");
+-	if (!out) {
+-		perror (argv[2]);
+-		return (2);
+-	}
++	if (!out)
++		err(2, "writing `%s'", argv[2]);
+ 	
+ 	/* Now we do the actual work. Write VAX MOP-image header */
+ 	
+ 	fwrite (header, sizeof (header), 1, out);
+ 
+-	fprintf (stderr, "copying %lu", dl.a_text);
+-	fprintf (stderr, "+%lu", dl.a_data);
+-	fprintf (stderr, "+%lu", dl.a_bss);
+-	fprintf (stderr, "->%lu", dl.xferaddr);
+-	fprintf (stderr, "\n");
++	fprintf(stderr, "copying %u+%u+%u->%u\n", dl.a_text,
++	    dl.a_data, dl.a_bss, dl.xferaddr);
+ 	
+ 	while ((i = mopFileRead(&dl,header)) > 0) {
+ 		(void)fwrite(header, i, 1, out);
+ 	}
+ 	
+ 	fclose (out);
+-
+ 	return (0);
+-#endif	
+ }
+diff -rwu mopd-2.5.3/mopchk/mopchk.c mopd-2.5.4/mopchk/mopchk.c
+--- mopd-2.5.3/mopchk/mopchk.c       2003-05-09 16:00:00.000000000 +0100
++++ mopd-2.5.4/mopchk/mopchk.c    2003-05-09 16:00:03.000000000 +0100
+@@ -154,10 +154,12 @@
+ 
+ }
+ 
++extern char *__progname;
++
+ void
+ Usage()
+ {
+-	fprintf(stderr, "usage: %s [-a] [-v] [filename...]\n", Program);
++	fprintf(stderr, "usage: %s [-a] [-v] [filename...]\n", __progname);
+ 	exit(1);
+ }
+ 
+diff -rwu mopd-2.5.3.patched/mopchk/Makefile mopd-2.5.4.orig/mopchk/Makefile
+--- mopd-2.5.3.patched/mopchk/Makefile	2003-03-27 09:12:15.000000000 +0000
++++ mopd-2.5.4.orig/mopchk/Makefile	2000-08-09 19:31:53.000000000 +0100
+@@ -1,20 +1,23 @@
+-PROGS = mopchk
+ OBJS = mopchk.o
++INCL=-I../ -I../common
+ LIBS = ../common/libcommon.a
+-LIBELF = -lelf
+ 
+-CPPFLAGS = -I..
++all: mopchk
+ 
+-all: $(PROGS)
++mopchk: ${OBJS} version.o $(LIBS)
++	cc -o mopchk version.o ${OBJS} ${LIBS} -lelf
+ 
+-mopchk: $(OBJS) $(LIBS)
+-	$(CC) $(CFLAGS) $(LDFLAGS) -o mopchk $(OBJS) $(LIBS) $(LIBELF)
++.c.o: .c
++	cc -c $(CFLAGS) ${INCL} $<
+ 
+-../common/libcommon.a:
+-	cd ../common && $(MAKE) libcommon.a
++clean:
++	rm -f *.o *~ mopchk VERSION version.*
+ 
+-.c.o:
+-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
++version.o: version.c
++version.c version.h: 
++	ln -sf ../common/VERSION VERSION
++	rm -f version.c ; sed 's/.*/char version[] = "&";/' VERSION > version.c
++	set `sed 's/\([0-9]*\)\.\([0-9]*\).*/\1 \2/' VERSION` ; \
++		{ echo '#define VERSION_MAJOR' $$1 ; \
++		  echo '#define VERSION_MINOR' $$2 ; } > version.h
+ 
+-clean:
+-	rm -f core $(PROGS) *.o
+Only in mopd-2.5.3.patched/mopchk: mopchk
+diff -rwu mopd-2.5.3.patched/mopchk/mopchk.1 mopd-2.5.4.orig/mopchk/mopchk.1
+--- mopd-2.5.3.patched/mopchk/mopchk.1	1996-08-11 23:50:49.000000000 +0100
++++ mopd-2.5.4.orig/mopchk/mopchk.1	2000-08-08 22:48:45.000000000 +0100
+@@ -1,3 +1,4 @@
++.\"	$NetBSD: mopchk.1,v 1.4 1998/09/30 15:05:01 briggs Exp $
+ .\"
+ .\" Copyright (c) 1996 Mats O Jansson.  All rights reserved.
+ .\"
+@@ -26,20 +27,18 @@
+ .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ .\"
+-.\" @(#) $Id$
+-.\"
+ .Dd October 2, 1995
+ .Dt MOPCHK 1
+ .Sh NAME
+ .Nm mopchk
+ .Nd MOP Check Utility
+ .Sh SYNOPSIS
+-.Nm mopchk 
++.Nm
+ .Op Fl a
+ .Op Fl v
+ .Op Ar filename
+ .Sh DESCRIPTION
+-.Nm Mopchk
++.Nm
+ shows information about which devices are known, version of mopd suite or
+ information about a MOP-image.
+ .Pp
+@@ -52,10 +51,10 @@
+ .It Fl a
+ Show all the Ethernets attached to the system.
+ .It Fl v
+-Show version of mopprobe.
++Show version of the mopd suite.
+ .El
+ .Sh BUGS
+-In some implementation the same interface can occure more than once.
++In some implementations the same interface can occur more than once.
+ .Sh SEE ALSO
+ .Xr mopa.out 1 ,
+ .Xr mopprobe 1 ,
+diff -rwu mopd-2.5.3.patched/mopchk/mopchk.c mopd-2.5.4.orig/mopchk/mopchk.c
+--- mopd-2.5.3.patched/mopchk/mopchk.c	2003-03-27 09:13:20.000000000 +0000
++++ mopd-2.5.4.orig/mopchk/mopchk.c	2000-08-08 23:27:10.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: mopchk.c,v 1.5 1997/10/16 07:36:50 lukem Exp $	*/
++
+ /*
+  * Copyright (c) 1995-96 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,8 +29,9 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++/*__RCSID("$NetBSD: mopchk.c,v 1.5 1997/10/16 07:36:50 lukem Exp $");*/
+ #endif
+ 
+ /*
+@@ -37,12 +40,12 @@
+  * Usage:	mopchk [-a] [-v] [filename...]
+  */
+ 
+-#include <common/os.h>
+-#include <common/common.h>
+-#include <common/mopdef.h>
+-#include <common/device.h>
+-#include <common/pf.h>
+-#include <common/file.h>
++#include "os.h"
++#include "common/common.h"
++#include "common/device.h"
++#include "common/file.h"
++#include "common/mopdef.h"
++#include "common/pf.h"
+ 
+ /*
+  * The list of all interfaces that are being listened to.  rarp_loop()
+@@ -50,22 +53,18 @@
+  */
+ struct if_info *iflist;
+ 
+-#ifdef NO__P
+-void   Usage         (/* void */);
+-void   mopProcess    (/* struct if_info *, u_char * */);
+-#else
+ void   Usage         __P((void));
++int	main __P((int, char **));
+ void   mopProcess    __P((struct if_info *, u_char *));
+-#endif
+ 
+ int     AllFlag = 0;		/* listen on "all" interfaces  */
+ int	VersionFlag = 0;	/* Show version */
+-int	nomulti = 1;		/* multicast mode not needed */
+-char	*Program;
++int	promisc = 0;		/* promisc mode not needed */
+ 
++extern char	*__progname;	/* from crt0.o */
+ extern char version[];
+ 
+-void
++int
+ main(argc, argv)
+ 	int     argc;
+ 	char  **argv;
+@@ -73,22 +72,13 @@
+ 	int     op, i, fd;
+ 	char   *filename;
+ 	struct if_info *ii;
+-	int	err;
+-
+-	extern int optind, opterr;
+-
+-	if ((Program = strrchr(argv[0], '/')))
+-		Program++;
+-	else
+-		Program = argv[0];
+-	if (*Program == '-')
+-		Program++;
++	int	err, aout;
+ 
+ 	/* All error reporting is done through syslogs. */
+-	openlog(Program, LOG_PID | LOG_CONS, LOG_DAEMON);
++	openlog(__progname, LOG_PID | LOG_CONS, LOG_DAEMON);
+ 
+ 	opterr = 0;
+-	while ((op = getopt(argc, argv, "av")) != EOF) {
++	while ((op = getopt(argc, argv, "av")) != -1) {
+ 		switch (op) {
+ 		case 'a':
+ 			AllFlag++;
+@@ -102,26 +92,23 @@
+ 		}
+ 	}
+ 
+-	fileinfo = 1;
+-	
+ 	if (VersionFlag)
+-		printf("%s: Version %s\n",Program,version);
++		printf("%s: Version %s\n", __progname, version);
+ 
+ 	if (AllFlag) {
+ 		if (VersionFlag)
+ 			printf("\n");
+ 		iflist = NULL;
+ 		deviceInitAll();
+-		if (iflist == NULL) {
++		if (iflist == NULL)
+ 			printf("No interface\n");
+-		} else {
++		else {
+ 			printf("Interface Address\n");
+-			for (ii = iflist; ii; ii = ii->next) {
++			for (ii = iflist; ii; ii = ii->next)
+ 				printf("%-9s %x:%x:%x:%x:%x:%x\n",
+-				       ii->if_name,
+-				       ii->eaddr[0],ii->eaddr[1],ii->eaddr[2],
+-				       ii->eaddr[3],ii->eaddr[4],ii->eaddr[5]);
+-			}
++				    ii->if_name, ii->eaddr[0], ii->eaddr[1],
++				    ii->eaddr[2], ii->eaddr[3], ii->eaddr[4],
++				    ii->eaddr[5]);
+ 		}
+ 	}
+ 	
+diff -rwu mopd-2.5.3.patched/mopd/Makefile mopd-2.5.4.orig/mopd/Makefile
+--- mopd-2.5.3.patched/mopd/Makefile	2003-03-27 09:12:15.000000000 +0000
++++ mopd-2.5.4.orig/mopd/Makefile	2000-08-09 19:31:36.000000000 +0100
+@@ -1,20 +1,23 @@
+-PROGS = mopd
+ OBJS = mopd.o process.o
++INCL=-I../ -I../common
+ LIBS = ../common/libcommon.a
+-LIBELF = -lelf
+ 
+-CPPFLAGS = -I..
++all: mopd
+ 
+-all: $(PROGS)
++mopd: ${OBJS} version.o $(LIBS)
++	cc -o mopd version.o ${OBJS} ${LIBS} -lelf
+ 
+-mopd: $(OBJS) $(LIBS)
+-	$(CC) $(CFLAGS) $(LDFLAGS) -o mopd $(OBJS) $(LIBS) $(LIBELF)
++.c.o: .c
++	cc -c $(CFLAGS) ${INCL} $<
+ 
+-../common/libcommon.a:
+-	cd ../common && $(MAKE) libcommon.a
++clean:
++	rm -f *.o *~ mopd VERSION version.*
+ 
+-.c.o:
+-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
++version.o: version.c
++version.c version.h: 
++	ln -sf ../common/VERSION VERSION
++	rm -f version.c ; sed 's/.*/char version[] = "&";/' VERSION > version.c
++	set `sed 's/\([0-9]*\)\.\([0-9]*\).*/\1 \2/' VERSION` ; \
++		{ echo '#define VERSION_MAJOR' $$1 ; \
++		  echo '#define VERSION_MINOR' $$2 ; } > version.h
+ 
+-clean:
+-	rm -f core $(PROGS) *.o
+Only in mopd-2.5.3.patched/mopd: mopd
+diff -rwu mopd-2.5.3.patched/mopd/mopd.8 mopd-2.5.4.orig/mopd/mopd.8
+--- mopd-2.5.3.patched/mopd/mopd.8	1996-08-14 12:56:42.000000000 +0100
++++ mopd-2.5.4.orig/mopd/mopd.8	2000-08-08 22:47:20.000000000 +0100
+@@ -1,3 +1,4 @@
++.\"	$NetBSD: mopd.8,v 1.2 1997/03/25 03:07:48 thorpej Exp $
+ .\"
+ .\" Copyright (c) 1993-96 Mats O Jansson.  All rights reserved.
+ .\"
+@@ -26,33 +27,31 @@
+ .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ .\"
+-.\" @(#) $Id$
+-.\"
+ .Dd September 24, 1995
+ .Dt MOPD 8
+ .Sh NAME
+ .Nm mopd
+ .Nd MOP Loader Daemon
+ .Sh SYNOPSIS
+-.Nm mopd
++.Nm
+ .Op Fl adf
+ .Op Ar interface
+ .Sh DESCRIPTION
+-.Nm Mopd
++.Nm
+ services MOP Load requests on the Ethernet connected to
+ .Ar interface
+ or all interfaces if
+ .Sq Fl a
+ is given.
+ In a load request received by
+-.Nm mopd
++.Nm
+ a filename can be given. This is the normal case for e.g. terminal servers.
+ If a filename isn't given
+-.Nm mopd
++.Nm
+ must know what image to load.
+ .Pp
+ Upon receiving a request, 
+-.Nm mopd
++.Nm
+ checks if the requested file exists in
+ .Pa /tftpboot/mop , 
+ the filename is normaly uppercase and with an extension of
+@@ -62,14 +61,14 @@
+ .Pa 08002b09f4de.SYS
+ and it might be a soft link to another file.
+ .Pp
+-.Nm Mopd
++.Nm
+ supports two kinds of files. The first type that is check is if the file is
+ in
+ .Xr a.out 5
+ format. If not, a couple of Digital's formats are checked.
+ .Pp
+ In normal operation, 
+-.Nm mopd
++.Nm
+ forks a copy of itself and runs in
+ the background.  Anomalies and errors are reported via 
+ .Xr syslog 3 .
+@@ -86,9 +85,6 @@
+ .It Fl f
+ Run in the foreground. 
+ .El
+-.Sh BUGS
+-.Xr a.out 5
+-isn't supported yet non bsd implementations (otherOS).
+ .Sh FILES
+ .Bl -tag -width Pa -compact
+ .It Pa /tftpboot/mop
+diff -rwu mopd-2.5.3.patched/mopd/mopd.c mopd-2.5.4.orig/mopd/mopd.c
+--- mopd-2.5.3.patched/mopd/mopd.c	2003-03-27 09:14:41.000000000 +0000
++++ mopd-2.5.4.orig/mopd/mopd.c	2000-08-09 00:13:32.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: mopd.c,v 1.5 1997/10/16 23:25:17 lukem Exp $	*/
++
+ /*
+  * Copyright (c) 1993-96 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,8 +29,9 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++/*__RCSID("$NetBSD: mopd.c,v 1.5 1997/10/16 23:25:17 lukem Exp $");*/
+ #endif
+ 
+ /*
+@@ -38,17 +41,23 @@
+  *		mopd [ -d -f -v ] [ -3 | -4 ] interface
+  */
+ 
+-#include <common/os.h>
+-#include <common/common.h>
+-#include <common/mopdef.h>
+-#include <common/device.h>
+-#include <common/print.h>
+-#include <common/pf.h>
+-#include <common/cmp.h>
+-#include <common/get.h>
+-#include <common/dl.h>
+-#include <common/rc.h>
++#include "common/os.h"
++#include "common/cmp.h"
++#include "common/common.h"
++#include "common/device.h"
++#include "common/dl.h"
++#include "common/get.h"
++#include "common/mopdef.h"
++#include "common/pf.h"
++#include "common/print.h"
+ #include "process.h"
++#include "common/rc.h"
++
++#ifndef __linux__
++#include <util.h>
++#else
++#define pidfile(x)  x;
++#endif
+ 
+ /*
+  * The list of all interfaces that are being listened to. 
+@@ -56,15 +65,9 @@
+  */
+ struct if_info *iflist;
+ 
+-#ifdef NO__P
+-void   Loop	     (/* void */);
+-void   Usage         (/* void */);
+-void   mopProcess    (/* struct if_info *, u_char * */);
+-#else
+-void   Loop	     __P((void));
+ void   Usage         __P((void));
++int	main __P((int, char **));
+ void   mopProcess    __P((struct if_info *, u_char *));
+-#endif
+ 
+ int     AllFlag = 0;		/* listen on "all" interfaces */
+ int     DebugFlag = 0;		/* print debugging messages   */
+@@ -72,29 +75,21 @@
+ int	VersionFlag = 0;	/* print version              */
+ int	Not3Flag = 0;		/* Not MOP V3 messages.       */
+ int	Not4Flag = 0;		/* Not MOP V4 messages.       */
+-int	nomulti = 0;		/* Need multicast mode        */
+-char    *Program;
++int	promisc = 1;		/* Need promisc mode    */
+ 
+-void
++extern char *__progname;	/* from crt0.o */
++
++int
+ main(argc, argv)
+ 	int     argc;
+ 	char  **argv;
+ {
+-	int	c, pid, devnull, f;
++	int	c, pid;
+ 	char   *interface;
+ 
+-	extern int optind;
+ 	extern char version[];
+ 
+-	if ((Program = strrchr(argv[0], '/')))
+-		Program++;
+-	else
+-		Program = argv[0];
+-
+-	if (*Program == '-')
+-		Program++;
+-
+-	while ((c = getopt(argc, argv, "34adfmv")) != EOF)
++	while ((c = getopt(argc, argv, "34adfv")) != -1)
+ 		switch (c) {
+ 			case '3':
+ 				Not3Flag++;
+@@ -111,9 +106,6 @@
+ 			case 'f':
+ 				ForegroundFlag++;
+ 				break;
+-			case 'm':
+-				nomulti++;
+-				break;
+ 			case 'v':
+ 				VersionFlag++;
+ 				break;
+@@ -123,7 +115,7 @@
+ 		}
+ 	
+ 	if (VersionFlag) {
+-		fprintf(stdout,"%s: version %s\n", Program, version);
++		fprintf(stdout,"%s: version %s\n", __progname, version);
+ 		exit(0);
+ 	}
+ 
+@@ -136,16 +128,13 @@
+ 		Usage();
+ 
+ 	/* All error reporting is done through syslogs. */
+-	openlog(Program, LOG_PID | LOG_CONS, LOG_DAEMON);
++	openlog(__progname, LOG_PID | LOG_CONS, LOG_DAEMON);
+ 
+-	if ((!ForegroundFlag) && DebugFlag) {
++	if ((!ForegroundFlag) && DebugFlag)
+ 		fprintf(stdout,
+-			"%s: not running as daemon, -d given.\n",
+-			Program);
+-	}
++		    "%s: not running as daemon, -d given.\n", __progname);
+ 
+ 	if ((!ForegroundFlag) && (!DebugFlag)) {
+-
+ 		pid = fork();
+ 		if (pid > 0)
+ 			/* Parent exits, leaving child in background. */
+@@ -157,32 +146,11 @@
+ 			}
+ 
+ 		/* Fade into the background */
+-		f = open("/dev/tty", O_RDWR);
+-		if (f >= 0) {
+-			if (ioctl(f, TIOCNOTTY, 0) < 0) {
+-				syslog(LOG_ERR, "TIOCNOTTY: %m");
+-				exit(0);
+-			}
+-			(void) close(f);
+-		}
+-		
+-		(void) chdir("/");
+-#ifdef SETPGRP_NOPARAM
+-		(void) setpgrp();
+-#else
+-		(void) setpgrp(0, getpid());
+-#endif
+-		devnull = open("/dev/null", O_RDWR);
+-		if (devnull >= 0) {
+-			(void) dup2(devnull, 0);
+-			(void) dup2(devnull, 1);
+-			(void) dup2(devnull, 2);
+-			if (devnull > 2)
+-				(void) close(devnull);
+-		}
++		daemon(0, 0);
++		pidfile(NULL);
+ 	}
+ 
+-	syslog(LOG_INFO, "%s %s started.", Program, version);
++	syslog(LOG_INFO, "%s %s started.", __progname, version);
+ 
+ 	if (AllFlag)
+  		deviceInitAll();
+@@ -190,13 +158,17 @@
+ 		deviceInitOne(interface);
+ 
+ 	Loop();
++	/* NOTREACHED */
++	return (0);
+ }
+ 
+ void
+ Usage()
+ {
+-	(void) fprintf(stderr, "usage: %s -a [ -d -f -m -v ] [ -3 | -4 ]\n",Program);
+-	(void) fprintf(stderr, "       %s [ -d -f -m -v ] [ -3 | -4 ] interface\n",Program);
++	(void) fprintf(stderr, "usage: %s -a [ -d -f -v ] [ -3 | -4 ]\n",
++	    __progname);
++	(void) fprintf(stderr, "       %s [ -d -f -v ] [ -3 | -4 ] interface\n",
++	    __progname);
+ 	exit(1);
+ }
+ 
+@@ -214,14 +186,12 @@
+ 
+ 	/* We don't known with transport, Guess! */
+ 
+-	trans = mopGetTrans(pkt, ii->trans);
++	trans = mopGetTrans(pkt, 0);
+ 
+ 	/* Ok, return if we don't wan't this message */
+ 
+-	if ((trans == TRANS_ETHER || trans == TRANS_FDDI_8021H) && Not3Flag)
+-		return;
+-	if ((trans == TRANS_8023 || trans == TRANS_FDDI_8022) && Not4Flag)
+-		return;
++	if ((trans == TRANS_ETHER) && Not3Flag) return;
++	if ((trans == TRANS_8023) && Not4Flag)	return;
+ 
+ 	index = 0;
+ 	mopGetHeader(pkt, &index, &dst, &src, &ptype, &len, trans);
+Only in mopd-2.5.3.patched/mopd: mopd.o
+diff -rwu mopd-2.5.3.patched/mopd/process.c mopd-2.5.4.orig/mopd/process.c
+--- mopd-2.5.3.patched/mopd/process.c	2003-03-27 09:14:41.000000000 +0000
++++ mopd-2.5.4.orig/mopd/process.c	2000-08-09 00:04:16.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: process.c,v 1.7 2000/06/27 18:57:41 ragge Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,27 +29,23 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++static char rcsid[]="$NetBSD: process.c,v 1.7 2000/06/27 18:57:41 ragge Exp $";
+ #endif
+ 
+-#include <common/os.h>
+-#include <common/common.h>
+-#include <common/mopdef.h>
+-#include <common/nmadef.h>
+-#include <common/get.h>
+-#include <common/put.h>
+-#include <common/print.h>
+-#include <common/pf.h>
+-#include <common/cmp.h>
+-#include <common/dl.h>
+-#include <common/rc.h>
+-#include <common/file.h>
+-#include "process.h"
+-
+-#define SEND_REAL_HOSTNAME
+-
+-#define MAX_ETH_PAYLOAD 1500
++#include "os.h"
++#include "cmp.h"
++#include "common.h"
++#include "dl.h"
++#include "file.h"
++#include "get.h"
++#include "mopdef.h"
++#include "nmadef.h"
++#include "pf.h"
++#include "print.h"
++#include "put.h"
++#include "rc.h"
+ 
+ extern u_char	buf[];
+ extern int	DebugFlag;
+@@ -56,18 +54,22 @@
+ extern char	dl_mcst[];		/* Dump/Load Multicast		*/
+ extern char	rc_mcst[];		/* Remote Console Multicast	*/
+ 
+-#ifdef NO__P
+-ssize_t mopFileRead   (/* struct dllist *, u_char * */);
+-#else
+-ssize_t mopFileRead   __P((struct dllist *, u_char *));
+-#endif
++void	mopNextLoad __P((u_char *, u_char *, u_char, int));
++void	mopProcessDL __P((FILE *, struct if_info *, u_char *, int *,
++	    u_char *, u_char *, int, u_short));
++void	mopProcessRC __P((FILE *, struct if_info *, u_char *, int *,
++	    u_char *, u_char *, int, u_short));
++void	mopProcessInfo __P((u_char *, int *, u_short, struct dllist *, int));
++void	mopSendASV __P((u_char *, u_char *, struct if_info *, int));
++void	mopStartLoad __P((u_char *, u_char *, struct dllist *, int));
+ 
+ void
+ mopProcessInfo(pkt,index,moplen,dl_rpr,trans)
+ 	u_char  *pkt;
+-	int     *index, trans;
++	int     *index;
+ 	u_short moplen;
+ 	struct  dllist  *dl_rpr;
++	int	trans;
+ {
+         u_short itype,tmps;
+ 	u_char  ilen ,tmpc,device;
+@@ -82,10 +84,6 @@
+ 	case TRANS_8023:
+ 		moplen = moplen + 14;
+ 		break;
+-	case TRANS_FDDI_8021H:
+-	case TRANS_FDDI_8022:
+-		moplen = moplen + 23;
+-		break;
+ 	}
+ 
+ 	itype = mopGetShort(pkt,index); 
+@@ -216,6 +214,8 @@
+ 	}
+ }
+ 
++#define MAX_ETH_PAYLOAD 1492
++
+ void
+ mopStartLoad(dst, src, dl_rpr, trans)
+ 	u_char	*dst,*src;
+@@ -248,8 +248,8 @@
+ 			if (dllist[i].status == DL_STATUS_FREE) {
+ 				if (slot == -1) {
+ 					slot = i;
+-					bcopy((char *)dst,
+-					      (char *)dllist[i].eaddr, 6);
++					memmove((char *)dllist[i].eaddr,
++					    (char *)dst, 6);
+ 				}
+ 			}
+ 		}
+@@ -284,7 +284,7 @@
+ 		dllist[slot].dl_bsz = 1010;
+ 	if (dllist[slot].dl_bsz == 0)           /* Needed by "big" VAXen */
+ 		dllist[slot].dl_bsz = MOP_K_DLBSZ_DEFAULT;
+-	if (trans == TRANS_8023 || trans == TRANS_FDDI_8022)
++	if (trans == TRANS_8023)
+ 		if (dllist[slot].dl_bsz > MAX_ETH_PAYLOAD - 8)
+ 			dllist[slot].dl_bsz = MAX_ETH_PAYLOAD - 8;
+ 	if (trans != TRANS_8023)
+@@ -341,13 +340,6 @@
+ 	u_short  newlen = 0,ptype = MOP_K_PROTO_DL;
+ 	u_char	 mopcode;
+ 
+-#ifdef SEND_REAL_HOSTNAME
+-	struct utsname uts_name;
+-	char hostname[MAXHOSTNAMELEN];
+-#else
+-	char hostname[MAXHOSTNAMELEN] = DEFAULT_HOSTNAME;
+-#endif
+-
+ 	slot = -1;
+ 	
+ 	for (i = 0; i < MAXDL; i++) {
+@@ -404,22 +398,13 @@
+ 		
+ 	} else {
+ 		if (len == 0) {
+-#ifdef SEND_REAL_HOSTNAME
+-			if (uname(&uts_name) < 0) {
+-				syslog(LOG_ERR,
+-				       "uname: %m, sending `%s' as hostname",
+-				       DEFAULT_HOSTNAME);
+-				sprintf(hostname, "%s", DEFAULT_HOSTNAME);
+-			} else
+-				sprintf(hostname, "%s", uts_name.nodename);
+-#endif
+ 			index = pindex;
+ 			mopcode = MOP_K_CODE_PLT;
+ 			mopPutChar (pkt,&index,mopcode);
+ 			mopPutChar (pkt,&index,dllist[slot].count);
+ 			mopPutChar (pkt,&index,MOP_K_PLTP_HSN);
+- 			mopPutChar (pkt,&index,strlen(hostname));
+-			mopPutMulti(pkt,&index,hostname,strlen(hostname));
++ 			mopPutChar (pkt,&index,3);
++			mopPutMulti(pkt,&index,"ipc",3);
+ 			mopPutChar (pkt,&index,MOP_K_PLTP_HSA);
+ 			mopPutChar (pkt,&index,6);
+ 			mopPutMulti(pkt,&index,src,6);
+@@ -462,13 +447,15 @@
+ mopProcessDL(fd, ii, pkt, index, dst, src, trans, len)
+ 	FILE	*fd;
+ 	struct if_info *ii;
+-	u_char	*pkt, *dst, *src;
+-	int	*index, trans;
++	u_char	*pkt;
++	int	*index;
++	u_char	*dst, *src;
++	int	 trans;
+ 	u_short	 len;
+ {
+ 	u_char  tmpc;
+ 	u_short moplen;
+-	u_char  pfile[257], mopcode;
++	u_char  pfile[129], mopcode;
+ 	char    filename[FILENAME_MAX];
+ 	char    line[100];
+ 	int     i,nfd,iindex;
+@@ -517,6 +504,8 @@
+ 		rpr_pgty = mopGetChar(pkt,index);	/* Program Type */
+ 		
+ 		tmpc = mopGetChar(pkt,index);		/* Software ID Len */
++		if (tmpc > sizeof(pfile) - 1)
++			return;
+ 		for (i = 0; i < tmpc; i++) {
+ 			pfile[i] = mopGetChar(pkt,index);
+ 			pfile[i+1] = '\0';
+@@ -538,9 +527,9 @@
+ 	
+ 		iindex = *index;
+ 		dl_rpr = &dl;
+-		bzero(dl_rpr,sizeof(*dl_rpr));
++		memset(dl_rpr, 0, sizeof(*dl_rpr));
+ 		dl_rpr->ii = ii;
+-		bcopy((char *)src, (char *)(dl_rpr->eaddr), 6);
++		memmove((char *)(dl_rpr->eaddr), (char *)src, 6);
+ 		mopProcessInfo(pkt,index,moplen,dl_rpr,trans);
+ 
+ 		sprintf(filename,"%s/%s.SYS", MOP_FILE_PATH, pfile);
+@@ -600,8 +589,10 @@
+ mopProcessRC(fd, ii, pkt, index, dst, src, trans, len)
+ 	FILE	*fd;
+ 	struct if_info *ii;
+-	u_char	*pkt, *dst, *src;
+-	int	*index, trans;
++	u_char	*pkt;
++	int	*index;
++	u_char	*dst, *src;
++	int	 trans;
+ 	u_short	 len;
+ {
+ 	u_char	 tmpc;
+@@ -644,9 +635,9 @@
+ 		}
+ 		
+ 		dl_rpr = &dl;
+-		bzero(dl_rpr,sizeof(*dl_rpr));
++		memset(dl_rpr, 0, sizeof(*dl_rpr));
+ 		dl_rpr->ii = ii;
+-		bcopy((char *)src, (char *)(dl_rpr->eaddr), 6);
++		memmove((char *)(dl_rpr->eaddr), (char *)src, 6);
+ 		mopProcessInfo(pkt,index,moplen,dl_rpr,trans);
+ 		
+ 		break;
+diff -rwu mopd-2.5.3.patched/mopd/process.h mopd-2.5.4.orig/mopd/process.h
+--- mopd-2.5.3.patched/mopd/process.h	1995-10-03 13:15:28.000000000 +0100
++++ mopd-2.5.4.orig/mopd/process.h	2000-08-08 22:47:20.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: process.h,v 1.2 1997/03/25 03:07:52 thorpej Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -26,25 +28,18 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- *	$Id$
++ *	$NetBSD: process.h,v 1.2 1997/03/25 03:07:52 thorpej Exp $
+  *
+  */
+ 
+ #ifndef _PROCESS_H_
+ #define _PROCESS_H_
+ 
+-#ifdef NO__P
+-void	mopProcessDL (/* FILE *, struct if_info *, u_char *, int *,
+-			 u_char *, u_char *, int, u_short */);
+-void	mopProcessRC (/* FILE *, struct if_info *, u_char *, int *,
+-			 u_char *, u_char *, int, u_short */);
+-#else
+ __BEGIN_DECLS
+ void	mopProcessDL __P((FILE *, struct if_info *, u_char *, int *,
+ 			  u_char *, u_char *, int, u_short));
+ void	mopProcessRC __P((FILE *, struct if_info *, u_char *, int *,
+ 			  u_char *, u_char *, int, u_short));
+ __END_DECLS
+-#endif
+ 
+ #endif _PROCESS_H_
+Only in mopd-2.5.3.patched/mopd: process.o
+diff -rwu mopd-2.5.3.patched/mopprobe/Makefile mopd-2.5.4.orig/mopprobe/Makefile
+--- mopd-2.5.3.patched/mopprobe/Makefile	2003-03-27 09:05:58.000000000 +0000
++++ mopd-2.5.4.orig/mopprobe/Makefile	2000-08-09 19:32:06.000000000 +0100
+@@ -1,19 +1,23 @@
+-PROGS = mopprobe
+ OBJS = mopprobe.o
++INCL=-I../ -I../common
+ LIBS = ../common/libcommon.a
+ 
+-CPPFLAGS = -I..
++all: mopprobe
+ 
+-all: $(PROGS)
++mopprobe: ${OBJS} version.o $(LIBS)
++	cc -o mopprobe version.o ${OBJS} ${LIBS}
+ 
+-mopprobe: $(OBJS) $(LIBS)
+-	$(CC) $(CFLAGS) $(LDFLAGS) -o mopprobe $(OBJS) $(LIBS)
++.c.o: .c
++	cc -c $(CFLAGS) ${INCL} $<
+ 
+-../common/libcommon.a:
+-	cd ../common && $(MAKE) libcommon.a
++clean:
++	rm -f *.o *~ mopprobe VERSION version.*
+ 
+-.c.o:
+-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
++version.o: version.c
++version.c version.h: 
++	ln -sf ../common/VERSION VERSION
++	rm -f version.c ; sed 's/.*/char version[] = "&";/' VERSION > version.c
++	set `sed 's/\([0-9]*\)\.\([0-9]*\).*/\1 \2/' VERSION` ; \
++		{ echo '#define VERSION_MAJOR' $$1 ; \
++		  echo '#define VERSION_MINOR' $$2 ; } > version.h
+ 
+-clean:
+-	rm -f core $(PROGS) *.o
+Only in mopd-2.5.3.patched/mopprobe: mopprobe
+diff -rwu mopd-2.5.3.patched/mopprobe/mopprobe.1 mopd-2.5.4.orig/mopprobe/mopprobe.1
+--- mopd-2.5.3.patched/mopprobe/mopprobe.1	1996-08-12 00:05:00.000000000 +0100
++++ mopd-2.5.4.orig/mopprobe/mopprobe.1	2000-08-08 22:49:08.000000000 +0100
+@@ -1,3 +1,4 @@
++.\"	$NetBSD: mopprobe.1,v 1.2 1997/03/25 03:07:56 thorpej Exp $
+ .\"
+ .\" Copyright (c) 1996 Mats O Jansson.  All rights reserved.
+ .\"
+@@ -26,23 +27,20 @@
+ .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ .\"
+-.\" @(#) $Id$
+-.\"
+ .Dd October 2, 1995
+ .Dt MOPPROBE 1
+ .Sh NAME
+ .Nm mopprobe
+ .Nd MOP Probe Utility
+ .Sh SYNOPSIS
+-.Nm mopprobe 
++.Nm
+ .Fl a
+ .Op Fl 3 | 4
+-.Pp
+-.Nm mopprobe 
++.Nm ""
+ .Op Fl 3 | 4
+ .Ar interface
+ .Sh DESCRIPTION
+-.Nm Mopprobe
++.Nm
+ prints the ethernet address and nodename of MOP SID message on the Ethernet
+ connected to
+ .Ar interface
+diff -rwu mopd-2.5.3.patched/mopprobe/mopprobe.c mopd-2.5.4.orig/mopprobe/mopprobe.c
+--- mopd-2.5.3.patched/mopprobe/mopprobe.c	2003-03-27 09:14:41.000000000 +0000
++++ mopd-2.5.4.orig/mopprobe/mopprobe.c	2000-08-08 23:27:36.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: mopprobe.c,v 1.4 1997/04/17 21:09:27 christos Exp $	*/
++
+ /*
+  * Copyright (c) 1993-96 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,8 +29,9 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++/*__RCSID("$NetBSD: mopprobe.c,v 1.4 1997/04/17 21:09:27 christos Exp $");*/
+ #endif
+ 
+ /*
+@@ -38,15 +41,15 @@
+  *		mopprobe [ -3 | -4 ] interface
+  */
+ 
+-#include <common/os.h>
+-#include <common/common.h>
+-#include <common/mopdef.h>
+-#include <common/device.h>
+-#include <common/print.h>
+-#include <common/get.h>
+-#include <common/cmp.h>
+-#include <common/pf.h>
+-#include <common/nmadef.h>
++#include "os.h"
++#include "common/cmp.h"
++#include "common/common.h"
++#include "common/device.h"
++#include "common/get.h"
++#include "common/mopdef.h"
++#include "common/nmadef.h"
++#include "common/pf.h"
++#include "common/print.h"
+ 
+ /*
+  * The list of all interfaces that are being listened to.  rarp_loop()
+@@ -54,25 +57,20 @@
+  */
+ struct if_info *iflist;
+ 
+-#ifdef NO__P
+-void   Loop	     (/* void */);
+-void   Usage         (/* void */);
+-void   mopProcess    (/* struct if_info *, u_char * */);
+-#else
+-void   Loop	     __P((void));
+ void   Usage         __P((void));
++int	main __P((int, char **));
+ void   mopProcess    __P((struct if_info *, u_char *));
+-#endif
+ 
+ int     AllFlag = 0;		/* listen on "all" interfaces  */
+ int     DebugFlag = 0;		/* print debugging messages    */
+ int	Not3Flag = 0;		/* Not MOP V3 messages         */
+ int	Not4Flag = 0;		/* Not MOP V4 messages         */
+ int     oflag = 0;		/* print only once             */
+-int	nomulti = 0;		/* Need multicast mode         */
+-char	*Program;
++int	promisc = 1;		/* Need promisc mode           */
+ 
+-void
++extern char *__progname;	/* from crt0.o */
++
++int
+ main(argc, argv)
+ 	int     argc;
+ 	char  **argv;
+@@ -80,20 +78,11 @@
+ 	int     op;
+ 	char   *interface;
+ 
+-	extern int optind, opterr;
+-
+-	if ((Program = strrchr(argv[0], '/')))
+-		Program++;
+-	else
+-		Program = argv[0];
+-	if (*Program == '-')
+-		Program++;
+-
+ 	/* All error reporting is done through syslogs. */
+-	openlog(Program, LOG_PID | LOG_CONS, LOG_DAEMON);
++	openlog(__progname, LOG_PID | LOG_CONS, LOG_DAEMON);
+ 
+ 	opterr = 0;
+-	while ((op = getopt(argc, argv, "admo")) != EOF) {
++	while ((op = getopt(argc, argv, "ado")) != -1) {
+ 		switch (op) {
+ 		case '3':
+ 			Not3Flag++;
+@@ -107,9 +96,6 @@
+ 		case 'd':
+ 			DebugFlag++;
+ 			break;
+-		case 'm':
+-			nomulti++;
+-			break;
+ 		case 'o':
+ 			oflag++;
+ 			break;
+@@ -132,13 +118,15 @@
+ 		deviceInitOne(interface);
+ 
+ 	Loop();
++	/* NOTREACHED */
++	return (0);
+ }
+ 
+ void
+ Usage()
+ {
+-	(void) fprintf(stderr, "usage: %s -a [ -m ] [ -3 | -4 ]\n",Program);
+-	(void) fprintf(stderr, "       %s [ -m ] [ -3 | -4 ] interface\n",Program);
++	(void) fprintf(stderr, "usage: %s -a [ -3 | -4 ]\n", __progname);
++	(void) fprintf(stderr, "       %s [ -3 | -4 ] interface\n", __progname);
+ 	exit(1);
+ }
+ 
+@@ -151,53 +139,25 @@
+ 	u_char *pkt;
+ {
+ 	u_char  *dst, *src, *p, mopcode, tmpc, ilen;
+-	u_short *ptype, moplen, tmps, itype;
++	u_short *ptype, moplen, tmps, itype, len;
+ 	int	index, i, device, trans;
+ 
+-	trans = ii->trans;
+-	if ((trans & (TRANS_ETHER + TRANS_8023))) {
+-		ptype = (u_short *)(pkt+12);
+-		if (ntohs(*ptype) < 1600) {
+-			trans &= TRANS_8023;
+-			if (Not4Flag)
+-				return;
+-		} else {
+-			trans &= TRANS_ETHER;
+-			if (Not3Flag)
+-				return;
+-		}
+-	} else if ((trans & (TRANS_FDDI_8021H + TRANS_FDDI_8022))) {
+-		if (*pkt >= MOP_K_FDDI_FC_MIN && *pkt <= MOP_K_FDDI_FC_MAX) {
+-			if (!bcmp((char *)(pkt+16),
+-					 (char *)dl_802_proto, 3)) {
+-				trans &= TRANS_FDDI_8022;
+-				if (Not4Flag)
+-					return;
+-			} else if (!bcmp((char *)(pkt+16),
+-				  (char *)dl_8021h_proto, 3)) {
+-				trans &= TRANS_FDDI_8021H;
+-				if (Not3Flag)
+-					return;
+-			} else
+-				return;
+-		} else
+-			return;
+-	} else
+-		return;
+-
+-	switch (trans) {
+-	case TRANS_8023:
+-	case TRANS_ETHER:
+ 		dst = pkt;
+ 		src = pkt + 6;
+-		break;
+-	case TRANS_FDDI_8022:
+-	case TRANS_FDDI_8021H:
+-		dst = pkt + 1;
+-		src = pkt + 7;
+-		break;
+-	default:
+-		return;
++	ptype   = (u_short *)(pkt+12);
++	index   = 0;
++	
++	if (*ptype < 1600) {
++		len = *ptype;
++		trans = TRANS_8023;
++		ptype = (u_short *)(pkt+20);
++		p = pkt+22;
++		if (Not4Flag) return;
++	} else {
++		len = 0;
++		trans = TRANS_ETHER;
++		p = pkt+14;
++		if (Not3Flag) return;
+ 	}
+ 
+ 	/* Ignore our own messages */
+@@ -214,21 +174,11 @@
+ 	
+ 	switch (trans) {
+ 	case TRANS_8023:
+-		index = 22;
+-		moplen = ntohs(*ptype);
+-		break;
+-	case TRANS_ETHER:
+-		index = 14;
+-		moplen = mopGetShort(pkt,&index);
++		moplen = len;
+ 		break;
+-	case TRANS_FDDI_8022:
+-	case TRANS_FDDI_8021H:
+-		index = 21;
++	default:
+ 		moplen = mopGetShort(pkt,&index);
+-		break;
+ 	}
+-	p = pkt + index;
+-	index = 0;
+ 	mopcode	= mopGetChar(p,&index);
+ 
+ 	/* Just process System Information */
+@@ -244,7 +194,7 @@
+ 	
+ 	itype	= mopGetShort(pkt,&index);
+ 
+-	while (index < (int)(moplen)) {
++	while (index < (int)(moplen + 2)) {
+ 		ilen	= mopGetChar(pkt,&index);
+ 		switch (itype) {
+ 		case 0:
+Only in mopd-2.5.3.patched/mopprobe: mopprobe.o
+diff -rwu mopd-2.5.3.patched/moptrace/Makefile mopd-2.5.4.orig/moptrace/Makefile
+--- mopd-2.5.3.patched/moptrace/Makefile	2003-03-27 09:05:58.000000000 +0000
++++ mopd-2.5.4.orig/moptrace/Makefile	2000-08-09 19:32:20.000000000 +0100
+@@ -1,19 +1,23 @@
+-PROGS = moptrace
+ OBJS = moptrace.o
++INCL=-I../ -I../common
+ LIBS = ../common/libcommon.a
+ 
+-CPPFLAGS = -I..
++all: moptrace
+ 
+-all: $(PROGS)
++moptrace: ${OBJS} version.o $(LIBS)
++	cc -o moptrace version.o ${OBJS} ${LIBS}
+ 
+-moptrace: $(OBJS) $(LIBS)
+-	$(CC) $(CFLAGS) $(LDFLAGS) -o moptrace $(OBJS) $(LIBS)
++.c.o: .c
++	cc -c $(CFLAGS) ${INCL} $<
+ 
+-../common/libcommon.a:
+-	cd ../common && $(MAKE) libcommon.a
++clean:
++	rm -f *.o *~ moptrace VERSION version.*
+ 
+-.c.o:
+-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
++version.o: version.c
++version.c version.h: 
++	ln -sf ../common/VERSION VERSION
++	rm -f version.c ; sed 's/.*/char version[] = "&";/' VERSION > version.c
++	set `sed 's/\([0-9]*\)\.\([0-9]*\).*/\1 \2/' VERSION` ; \
++		{ echo '#define VERSION_MAJOR' $$1 ; \
++		  echo '#define VERSION_MINOR' $$2 ; } > version.h
+ 
+-clean:
+-	rm -f core $(PROGS) *.o
+Only in mopd-2.5.3.patched/moptrace: moptrace
+diff -rwu mopd-2.5.3.patched/moptrace/moptrace.1 mopd-2.5.4.orig/moptrace/moptrace.1
+--- mopd-2.5.3.patched/moptrace/moptrace.1	1996-08-12 00:07:20.000000000 +0100
++++ mopd-2.5.4.orig/moptrace/moptrace.1	2000-08-08 22:49:23.000000000 +0100
+@@ -1,3 +1,4 @@
++.\"	$NetBSD: moptrace.1,v 1.4 1997/10/18 04:37:37 lukem Exp $
+ .\"
+ .\" Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+ .\"
+@@ -26,7 +27,7 @@
+ .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ .\"
+-.\" @(#) $Id$
++.\" @(#) $NetBSD: moptrace.1,v 1.4 1997/10/18 04:37:37 lukem Exp $
+ .\"
+ .Dd October 2, 1995
+ .Dt MOPTRACE 1
+@@ -34,18 +35,17 @@
+ .Nm moptrace
+ .Nd MOP Trace Utility
+ .Sh SYNOPSIS
+-.Nm moptrace 
++.Nm
+ .Op Fl a
+ .Op Fl d
+ .Op Fl 3 | 4
+-.Pp
+-.Nm moptrace 
++.Nm ""
+ .Op Fl d
+ .Op Fl 3 | 4
+ .Op Ar interface
+ .Sh DESCRIPTION
+-.Nm Moptrace
+-prints the contence of MOP packages on the Ethernet connected to
++.Nm
++prints the contents of MOP packages on the Ethernet connected to
+ .Ar interface
+ or all known interfaces if 
+ .Sq Fl a
+diff -rwu mopd-2.5.3.patched/moptrace/moptrace.c mopd-2.5.4.orig/moptrace/moptrace.c
+--- mopd-2.5.3.patched/moptrace/moptrace.c	2003-03-27 09:14:41.000000000 +0000
++++ mopd-2.5.4.orig/moptrace/moptrace.c	2000-08-08 23:27:51.000000000 +0100
+@@ -1,3 +1,5 @@
++/*	$NetBSD: moptrace.c,v 1.4 1997/04/17 21:09:33 christos Exp $	*/
++
+ /*
+  * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
+  *
+@@ -27,8 +29,9 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
+-#ifndef LINT
+-static char rcsid[] = "$Id$";
++#include <sys/cdefs.h>
++#ifndef lint
++/*__RCSID("$NetBSD: moptrace.c,v 1.4 1997/04/17 21:09:33 christos Exp $");*/
+ #endif
+ 
+ /*
+@@ -38,15 +41,15 @@
+  *		moptrace [ -d ] [ -3 | -4 ] interface
+  */
+ 
+-#include <common/os.h>
+-#include <common/common.h>
+-#include <common/mopdef.h>
+-#include <common/device.h>
+-#include <common/print.h>
+-#include <common/pf.h>
+-#include <common/dl.h>
+-#include <common/rc.h>
+-#include <common/get.h>
++#include "os.h"
++#include "common/common.h"
++#include "common/device.h"
++#include "common/dl.h"
++#include "common/get.h"
++#include "common/mopdef.h"
++#include "common/pf.h"
++#include "common/print.h"
++#include "common/rc.h"
+ 
+ /*
+  * The list of all interfaces that are being listened to. 
+@@ -54,24 +57,19 @@
+  */
+ struct if_info *iflist;
+ 
+-#ifdef NO__P
+-void   Loop	     (/* void */);
+-void   Usage         (/* void */);
+-void   mopProcess    (/* struct if_info *, u_char * */);
+-#else
+-void   Loop	     __P((void));
+ void   Usage         __P((void));
++int	main __P((int, char **));
+ void   mopProcess    __P((struct if_info *, u_char *));
+-#endif
+ 
+ int     AllFlag = 0;		/* listen on "all" interfaces  */
+ int     DebugFlag = 0;		/* print debugging messages    */
+ int	Not3Flag = 0;		/* Ignore MOP V3 messages      */
+ int	Not4Flag = 0;		/* Ignore MOP V4 messages      */ 
+-int	nomulti = 0;		/* Need multicast mode         */
+-char	*Program;
++int	promisc = 1;		/* Need promisc mode           */
+ 
+-void
++extern char *__progname;	/* from crt0.o */
++
++int
+ main(argc, argv)
+ 	int     argc;
+ 	char  **argv;
+@@ -79,21 +77,11 @@
+ 	int     op;
+ 	char   *interface;
+ 
+-	extern int optind, opterr;
+-
+-	if ((Program = strrchr(argv[0], '/')))
+-		Program++;
+-	else
+-		Program = argv[0];
+-	
+-	if (*Program == '-')
+-		Program++;
+-
+ 	/* All error reporting is done through syslogs. */
+-	openlog(Program, LOG_PID | LOG_CONS, LOG_DAEMON);
++	openlog(__progname, LOG_PID | LOG_CONS, LOG_DAEMON);
+ 
+ 	opterr = 0;
+-	while ((op = getopt(argc, argv, "34adm")) != EOF) {
++	while ((op = getopt(argc, argv, "34ad")) != -1) {
+ 		switch (op) {
+ 		case '3':
+ 			Not3Flag++;
+@@ -107,9 +95,6 @@
+ 		case 'd':
+ 			DebugFlag++;
+ 			break;
+-		case 'm':
+-			nomulti++;
+-			break;
+ 		default:
+ 			Usage();
+ 			/* NOTREACHED */
+@@ -129,14 +114,16 @@
+ 		deviceInitOne(interface);
+ 
+ 	Loop();
++	/* NOTREACHED */
++	return (0);
+ }
+ 
+ void
+ Usage()
+ {
+-	(void) fprintf(stderr, "usage: %s -a [ -d -m ] [ -3 | -4 ]\n",Program);
+-	(void) fprintf(stderr, "       %s [ -d -m ] [ -3 | -4 ] interface\n",
+-		       Program);
++	(void) fprintf(stderr, "usage: %s -a [ -d ] [ -3 | -4 ]\n", __progname);
++	(void) fprintf(stderr, "       %s [ -d ] [ -3 | -4 ] interface\n",
++		       __progname);
+ 	exit(1);
+ }
+ 
+@@ -152,14 +139,12 @@
+ 
+ 	/* We don't known which transport, Guess! */
+ 
+-	trans = mopGetTrans(pkt, ii->trans);
++	trans = mopGetTrans(pkt, 0);
+ 
+ 	/* Ok, return if we don't want this message */
+ 
+-	if ((trans == TRANS_ETHER || trans == TRANS_FDDI_8021H) && Not3Flag)
+-		return;
+-	if ((trans == TRANS_8023 || trans == TRANS_FDDI_8022) && Not4Flag)
+-		return;
++	if ((trans == TRANS_ETHER) && Not3Flag) return;
++	if ((trans == TRANS_8023) && Not4Flag)	return;
+ 
+ 	mopPrintHeader(stdout, pkt, trans);
+ 	mopPrintMopHeader(stdout, pkt, trans);
+@@ -170,5 +155,3 @@
+ 	fprintf(stdout, "\n");
+ 	fflush(stdout);
+ }
+-
+-
+diff -rwu mopd-2.5.3.patched/common/loop-linux2.c mopd-2.5.4.orig/common/loop-linux2.c
+--- mopd-2.5.3.patched/common/loop-linux2.c	2003-01-09 09:38:26.000000000 +0000
++++ mopd-2.5.4.orig/common/loop-linux2.c	2003-05-09 10:27:37.000000000 +0100
+@@ -0,0 +1,162 @@
++/*
++ * Copyright (c) 1993-95 Mats O Jansson.  All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ * 3. All advertising materials mentioning features or use of this software
++ *    must display the following acknowledgement:
++ *	This product includes software developed by Mats O Jansson.
++ * 4. The name of the author may not be used to endorse or promote products
++ *    derived from this software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
++ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
++ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
++ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
++ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
++ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
++ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#ifndef LINT
++static char rcsid[] = "$Id$";
++#endif
++
++#include <stdlib.h>
++#include <strings.h>
++#include <unistd.h>
++#if defined(__bsdi__) || defined(__FreeBSD__)
++#include <sys/time.h>
++#endif
++#include <sys/ioctl.h>
++#include <sys/errno.h>
++
++#include "os.h"
++#include "common.h"
++#include "mopdef.h"
++
++int
++mopOpenRC(p, trans)
++	struct if_info *p;
++	int	trans;
++{
++#ifndef NORC
++	return (*(p->iopen))(p->if_name,
++			     O_RDWR,
++			     MOP_K_PROTO_RC,
++			     trans);
++#else
++	return -1;
++#endif
++}
++
++int
++mopOpenDL(p, trans)
++	struct if_info *p;
++	int	trans;
++{
++#ifndef NODL
++	return (*(p->iopen))(p->if_name,
++			     O_RDWR,
++			     MOP_K_PROTO_DL,
++			     trans);
++#else
++	return -1;
++#endif
++}
++
++void
++mopReadRC()
++{
++}
++
++void
++mopReadDL()
++{
++}
++
++/*
++ * The list of all interfaces that are being listened to.  loop()
++ * "selects" on the descriptors in this list.
++ */
++struct if_info *iflist;
++
++void   mopProcess    __P((struct if_info *, u_char *));
++
++/*
++ * Loop indefinitely listening for MOP requests on the
++ * interfaces in 'iflist'.
++ */
++void
++Loop()
++{
++	u_char *buf, *bp, *ep;
++	int     cc;
++	fd_set  fds, listeners;
++	int     bufsize = 1100, maxfd =0;
++	struct if_info *ii;
++
++
++	if (iflist == 0) {
++		syslog(LOG_ERR, "no interfaces");
++		exit(0);
++	}
++
++	 buf = (u_char *) malloc((unsigned) bufsize); 
++
++	if (buf == 0) {
++		syslog(LOG_ERR, "malloc: %m");
++		exit(0);
++	}
++	/*
++         * Find the highest numbered file descriptor for select().
++         * Initialize the set of descriptors to listen to.
++         */
++	FD_ZERO(&fds);
++	for (ii = iflist; ii; ii = ii->next) {
++		if (ii->fd != -1) {
++			FD_SET(ii->fd, &fds);
++			if (ii->fd > maxfd)
++				maxfd = ii->fd;
++	        }
++	}
++	while (1) {
++		listeners = fds;
++		if (select(maxfd + 1, &listeners, (fd_set *) 0,
++			(fd_set *) 0, (struct timeval *) 0) < 0) {
++			syslog(LOG_ERR, "select: %m");
++			exit(0);
++		}
++		for (ii = iflist; ii; ii = ii->next) {
++			if (ii->fd != -1) {
++				if (!FD_ISSET(ii->fd, &listeners))
++					continue;
++			}
++	again:
++			cc = read(ii->fd, (char *) buf, bufsize);
++			/* Don't choke when we get ptraced */
++			if (cc < 0 && errno == EINTR)
++				goto again;
++
++			bp = buf;
++			ep = bp + cc;
++	
++if(bp < ep)
++	{
++	mopProcess(ii,buf);
++	}
++
++}
++
++}		
++}	
++
+diff -rwu mopd-2.5.3.patched/common/pf-linux2.c mopd-2.5.4.orig/common/pf-linux2.c
+--- mopd-2.5.3.patched/common/pf-linux2.c	2003-01-09 09:38:26.000000000 +0000
++++ mopd-2.5.4.orig/common/pf-linux2.c	2003-05-09 10:29:57.000000000 +0100
+@@ -0,0 +1,321 @@
++/*
++ * General Purpose AppleTalk Packet Filter Interface
++ *
++ * Copyright (c) 1992-1995, The University of Melbourne.
++ * All Rights Reserved.  Permission to redistribute or
++ * use any part of this software for any purpose must
++ * be obtained in writing from the copyright owner.
++ *
++ * This software is supplied "as is" without express
++ * or implied warranty.
++ *
++ * djh@munnari.OZ.AU
++ *
++ * Supports:
++ *	Linux SOCK_PACKET
++ *	
++ * $Author$
++ * $Revision$
++ *
++ *
++ * Modified for use with the linux-mopd port by Karl Maftoum 
++ * u963870@student.canberra.edu.au
++ *
++ */
++
++/*
++ * include header files
++ *
++ */
++
++#include <stdio.h>
++#include <sys/types.h>
++#include <sys/time.h>
++#include <sys/ioctl.h>
++#include <sys/file.h>
++#include <sys/socket.h>
++#include <net/if.h>
++#include <sys/errno.h>
++#include <linux/if_ether.h>
++#include <netdb.h>
++#include <ctype.h>
++#include <string.h>
++
++#define MOPDEF_SUPRESS_EXTERN
++#include "mopdef.h"
++
++/*
++ * definitions
++ *
++ */
++
++#define	READBUFSIZ	4096
++#define	NUMRDS		32
++
++struct RDS {
++  u_short dataLen;
++  u_char *dataPtr;
++};
++
++/*
++ * variables
++ *
++ */
++
++struct socklist {
++  int iflen;
++  struct sockaddr sa;
++} socklist[32];
++
++struct ifreq ifr;
++extern int errno;
++extern int promisc;
++
++struct RDS RDS[NUMRDS];
++
++/*
++ * Open and initialize packet filter
++ * for a particular protocol type.
++ *
++ */
++
++
++int
++pfInit(interface, mode, protocol, typ)
++char *interface;
++u_short protocol;
++int typ, mode;
++{
++  int s;
++  int ioarg;
++  char device[64];
++  unsigned long if_flags;
++
++
++  { u_short prot;
++
++    prot = ((typ == TRANS_8023) ? htons(ETH_P_802_2) : htons(protocol));
++    if ((s = socket(AF_INET, SOCK_PACKET, prot)) < 0) {
++      perror(interface);
++      return(-1);
++    }
++    if (s >= 32) {
++      close(s);
++      return(-1);
++    }
++  }
++
++  /*
++   * set filter for protocol and type (IPTalk, Phase 1/2)
++   *
++   */
++
++  if (setup_pf(s, protocol, typ) < 0)
++    return(-1);
++
++  /*
++   * set options, bind to underlying interface
++   *
++   */
++
++  strncpy(ifr.ifr_name, interface, sizeof(ifr.ifr_name));
++
++  /* record socket interface name and length */
++  strncpy(socklist[s].sa.sa_data, interface, sizeof(socklist[s].sa.sa_data));
++  socklist[s].iflen = strlen(interface);
++
++  return(s);
++}
++
++/*
++ * establish protocol filter
++ *
++ */
++
++int
++setup_pf(s, prot, typ)
++int s, typ;
++u_short prot;
++{
++  int ioarg;
++  u_short offset;
++  return(0);
++}
++
++/*
++ * get the interface ethernet address
++ *
++ */
++
++int
++pfEthAddr(s, interface, addr)
++int s;
++char *interface;
++u_char *addr;
++{
++  strncpy(ifr.ifr_name, interface, sizeof (ifr.ifr_name) -1);
++  ifr.ifr_name[sizeof(ifr.ifr_name)] = 0;
++  ifr.ifr_addr.sa_family = AF_INET;
++  if (ioctl(s, SIOCGIFHWADDR, &ifr) < 0) {
++    perror("SIOCGIFHWADDR");
++    return(-1);
++  }
++  memcpy((char *)addr, ifr.ifr_hwaddr.sa_data, 6);
++  return(0);
++}
++
++/*
++ * add a multicast address to the interface
++ *
++ */
++
++int
++pfAddMulti(s, interface, addr)
++int s;
++char *interface;
++u_char *addr;
++{
++  int sock;
++
++  strncpy(ifr.ifr_name, interface, sizeof (ifr.ifr_name) - 1);
++  ifr.ifr_name[sizeof(ifr.ifr_name)] = 0;
++
++  ifr.ifr_addr.sa_family = AF_UNSPEC;
++  bcopy((char *)addr, ifr.ifr_addr.sa_data, 6);
++
++  /*
++   * open a socket, temporarily, to use for SIOC* ioctls
++   *
++   */
++  if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
++    perror("socket()");
++    return(-1);
++  }
++  if (ioctl(sock, SIOCADDMULTI, (caddr_t)&ifr) < 0) {
++    perror("SIOCADDMULTI");
++    close(sock);
++    return(-1);
++  }
++  close(sock);
++  
++  return(0);
++}
++
++/*
++ * delete a multicast address from the interface
++ *
++ */
++
++int
++pfDelMulti(s, interface, addr)
++int s;
++char *interface;
++u_char *addr;
++{
++  int sock;
++
++  strncpy(ifr.ifr_name, interface, sizeof (ifr.ifr_name) - 1);
++  ifr.ifr_name[sizeof(ifr.ifr_name)] = 0;
++
++  ifr.ifr_addr.sa_family = AF_UNSPEC;
++  bcopy((char *)addr, ifr.ifr_addr.sa_data, 6);
++
++  /*
++   * open a socket, temporarily, to use for SIOC* ioctls
++   *
++   */
++  if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
++    perror("socket()");
++    return(-1);
++  }
++  if (ioctl(sock, SIOCDELMULTI, (caddr_t)&ifr) < 0) {
++    perror("SIOCDELMULTI");
++    close(sock);
++    return(-1);
++  }
++  close(sock);
++
++  return(0);
++}
++
++/*
++ * return 1 if ethernet interface capable of multiple opens
++ *
++ */
++
++int
++eth_mopen(phase)
++int phase;
++{
++  if (phase == 2)
++    return(0);
++  return(1);
++}
++
++/*
++ * read a packet
++ * Read Data Structure describes packet(s) received
++ *
++ */
++
++
++
++
++int
++pfRead(fd, buf, len)
++int fd, len;
++u_char *buf;
++{
++  int i, cc;
++
++  int fromlen;
++  struct sockaddr sa;
++
++  RDS[0].dataLen = 0;
++  fromlen = sizeof(struct sockaddr);
++
++  if ((cc = recvfrom(fd, (char *)buf, len, 0, &sa, &fromlen)) <= 0)
++    return(cc);
++
++  /* check if from right interface */
++  for (i = socklist[fd].iflen-1; i >= 0; i--)
++    if (sa.sa_data[i] != socklist[fd].sa.sa_data[i])
++      return(0);
++
++  RDS[0].dataLen = cc;
++  RDS[0].dataPtr = buf;
++  RDS[1].dataLen = 0;
++
++  return(cc);
++}
++
++/*
++ * write a packet
++ *
++ */
++
++int
++pfWrite(fd, buf, len)
++int fd, len;
++u_char *buf;
++{
++
++  if (sendto(fd, buf, len, 0, &socklist[fd].sa, sizeof(struct sockaddr)) == len)
++    return(len);
++
++  return(-1);
++}
++
++/*
++ * Return information to device.c how to open device.
++ * In this case the driver can handle both Ethernet type II and
++ * IEEE 802.3 frames (SNAP) in a single pfOpen.
++ */
++
++int
++pfTrans(interface)
++	char *interface;
++{
++	return TRANS_ETHER+TRANS_8023;
++}
++

@@ -1,0 +1,15 @@
+diff -up --recursive --new-file mopd-2.5.3.macro/common/pf-linux.c mopd-2.5.3/common/pf-linux.c
+--- mopd-2.5.3.macro/common/pf-linux.c	2002-11-17 12:37:22.000000000 +0000
++++ mopd-2.5.3/common/pf-linux.c	2002-11-17 12:46:41.000000000 +0000
+@@ -162,6 +162,11 @@ int typ, mode;
+   strncpy(socklist[s].sa.sa_data, interface, sizeof(socklist[s].sa.sa_data));
+   socklist[s].iflen = strlen(interface);
+ 
++  if (bind(s, &socklist[s].sa, sizeof(socklist[s].sa)) < 0) {
++    syslog(LOG_ERR, "pfInit: %s: bind: %m", interface);
++    exit(1);
++  }
++
+   return(s);
+ }
+ 

@@ -1,0 +1,14 @@
+diff -up --recursive --new-file mopd-2.5.3.macro/common/loop-bsd.c mopd-2.5.3/common/loop-bsd.c
+--- mopd-2.5.3.macro/common/loop-bsd.c	Fri Aug 16 22:41:43 1996
++++ mopd-2.5.3/common/loop-bsd.c	Fri Oct 26 00:14:37 2001
+@@ -135,8 +135,8 @@ Loop()
+ 	}
+ 	while (1) {
+ 		listeners = fds;
+-		if (select(maxfd + 1, &listeners, (struct fd_set *) 0,
+-			(struct fd_set *) 0, (struct timeval *) 0) < 0) {
++		if (select(maxfd + 1, &listeners, (fd_set *) 0,
++			(fd_set *) 0, (struct timeval *) 0) < 0) {
+ 			syslog(LOG_ERR, "select: %m");
+ 			exit(0);
+ 		}

@@ -1,0 +1,134 @@
+diff -up --recursive --new-file mopd-2.5.3.macro/common/device.c mopd-2.5.3/common/device.c
+--- mopd-2.5.3.macro/common/device.c	Sat Oct 27 19:14:58 2001
++++ mopd-2.5.3/common/device.c	Sat Oct 27 19:28:41 2001
+@@ -34,6 +34,7 @@ static char rcsid[] = "$Id: device.c,v 1
+ #include "os.h"
+ #include "common.h"
+ #include "mopdef.h"
++#include "pf.h"
+ 
+ struct	if_info *iflist;		/* Interface List		*/
+ 
+@@ -319,7 +320,7 @@ deviceInitAll()
+ 	ifc.ifc_len = sizeof ibuf;
+ 	ifc.ifc_buf = (caddr_t)ibuf;
+ 	if (ioctl(fd, SIOCGIFCONF, (char *)&ifc) < 0 ||
+-	    ifc.ifc_len < sizeof(struct ifreq)) {
++	    ifc.ifc_len < (int)sizeof(struct ifreq)) {
+ 		syslog(LOG_ERR, "deviceInitAll: old SIOCGIFCONF: %m");
+ 		exit(1);
+ 	}
+diff -up --recursive --new-file mopd-2.5.3.macro/common/dl.c mopd-2.5.3/common/dl.c
+--- mopd-2.5.3.macro/common/dl.c	Sat Oct 27 19:14:58 2001
++++ mopd-2.5.3/common/dl.c	Sat Oct 27 19:28:41 2001
+@@ -43,7 +43,7 @@ mopDumpDL(fd, pkt, trans)
+ 	int	 trans;
+ {
+ 	int	i,index = 0;
+-	long	tmpl;
++	u_int	tmpl;
+ 	u_char	tmpc,c,program[257],code,*ucp;
+ 	int	len,tmps,moplen;
+ 
+diff -up --recursive --new-file mopd-2.5.3.macro/common/get.c mopd-2.5.3/common/get.c
+--- mopd-2.5.3.macro/common/get.c	Sat Oct 27 18:27:16 2001
++++ mopd-2.5.3/common/get.c	Sat Oct 27 19:28:41 2001
+@@ -32,6 +32,7 @@ static char rcsid[] = "$Id: get.c,v 1.5 
+ #endif
+ 
+ #include <sys/types.h>
++#include <netinet/in.h>
+ #include "mopdef.h"
+ 
+ u_char
+@@ -58,7 +59,7 @@ mopGetShort(pkt, index)
+ 	return(ret);
+ }
+ 
+-u_long
++u_int
+ mopGetLong(pkt, index)
+ 	register u_char *pkt;
+ 	register int    *index;
+diff -up --recursive --new-file mopd-2.5.3.macro/common/get.h mopd-2.5.3/common/get.h
+--- mopd-2.5.3.macro/common/get.h	Thu Oct  5 20:21:59 1995
++++ mopd-2.5.3/common/get.h	Thu Oct 25 23:53:41 2001
+@@ -36,7 +36,7 @@
+ #ifdef NO__P
+ u_char	mopGetChar   (/* u_char *, int * */);
+ u_short	mopGetShort  (/* u_char *, int * */);
+-u_long	mopGetLong   (/* u_char *, int * */);
++u_int 	mopGetLong   (/* u_char *, int * */);
+ void	mopGetMulti  (/* u_char *, int *,u_char *,int */);
+ int	mopGetTrans  (/* u_char *, int */);
+ void	mopGetHeader (/* u_char *, int *, u_char **, u_char **, u_short *,
+@@ -46,7 +46,7 @@ u_short	mopGetLength (/* u_char *, int *
+ __BEGIN_DECLS
+ u_char	mopGetChar   __P((u_char *,int *));
+ u_short	mopGetShort  __P((u_char *,int *));
+-u_long	mopGetLong   __P((u_char *,int *));
++u_int 	mopGetLong   __P((u_char *,int *));
+ void	mopGetMulti  __P((u_char *,int *,u_char *,int));
+ int	mopGetTrans  __P((u_char *, int));
+ void	mopGetHeader __P((u_char *, int *, u_char **, u_char **, u_short *,
+diff -up --recursive --new-file mopd-2.5.3.macro/common/pf.h mopd-2.5.3/common/pf.h
+--- mopd-2.5.3.macro/common/pf.h	Fri Oct 13 19:31:29 1995
++++ mopd-2.5.3/common/pf.h	Thu Oct 25 23:53:56 2001
+@@ -36,7 +36,7 @@
+ #ifdef NO__P
+ int	pfTrans	   (/* char * */);
+ int	pfInit     (/* char *, int, u_short, int */);
+-int	pfEthAddr  (/* int, u_char * */);
++int	pfEthAddr  (/* int, char *, u_char * */);
+ int	pfAddMulti (/* int, char *, char * */);
+ int	pfDelMulti (/* int, char *, char * */);
+ int	pfRead     (/* int, u_char *, int */);
+@@ -45,7 +45,7 @@ int	pfWrite    (/* int, u_char *, int, i
+ __BEGIN_DECLS
+ int	pfTrans	   __P((char *));
+ int	pfInit     __P((char *, int, u_short, int));
+-int	pfEthAddr  __P((int, u_char *));
++int	pfEthAddr  __P((int, char *, u_char *));
+ int	pfAddMulti __P((int, char *, char *));
+ int	pfDelMulti __P((int, char *, char *));
+ int	pfRead     __P((int, u_char *, int));
+diff -up --recursive --new-file mopd-2.5.3.macro/common/rc.c mopd-2.5.3/common/rc.c
+--- mopd-2.5.3.macro/common/rc.c	Sat Oct 27 19:14:58 2001
++++ mopd-2.5.3/common/rc.c	Sat Oct 27 19:28:41 2001
+@@ -43,7 +43,7 @@ mopDumpRC(fd, pkt, trans)
+ 	int	 trans;
+ {
+ 	int	i,index = 0;
+-	long	tmpl;
++	u_int	tmpl;
+ 	u_char	tmpc,code,control;
+ 	int	len,tmps,moplen;
+ 
+diff -up --recursive --new-file mopd-2.5.3.macro/mopchk/mopchk.c mopd-2.5.3/mopchk/mopchk.c
+--- mopd-2.5.3.macro/mopchk/mopchk.c	Sat Oct 27 18:56:23 2001
++++ mopd-2.5.3/mopchk/mopchk.c	Sat Oct 27 19:28:41 2001
+@@ -162,7 +162,7 @@ main(argc, argv)
+ void
+ Usage()
+ {
+-	(void) fprintf(stderr, "usage: %d [-a] [-v] [filename...]\n",Program);
++	fprintf(stderr, "usage: %s [-a] [-v] [filename...]\n", Program);
+ 	exit(1);
+ }
+ 
+diff -up --recursive --new-file mopd-2.5.3.macro/mopd/process.c mopd-2.5.3/mopd/process.c
+--- mopd-2.5.3.macro/mopd/process.c	Sat Oct 27 19:14:58 2001
++++ mopd-2.5.3/mopd/process.c	Sat Oct 27 19:28:41 2001
+@@ -56,6 +56,12 @@ struct dllist dllist[MAXDL];		/* dump/lo
+ extern char	dl_mcst[];		/* Dump/Load Multicast		*/
+ extern char	rc_mcst[];		/* Remote Console Multicast	*/
+ 
++#ifdef NO__P
++ssize_t mopFileRead   (/* struct dllist *, u_char * */);
++#else
++ssize_t mopFileRead   __P((struct dllist *, u_char *));
++#endif
++
+ void
+ mopProcessInfo(pkt,index,moplen,dl_rpr,trans)
+ 	u_char  *pkt;

@@ -1,0 +1,66 @@
+diff -up --recursive --new-file mopd-2.5.3.macro/common/pf-linux.c mopd-2.5.3/common/pf-linux.c
+--- mopd-2.5.3.macro/common/pf-linux.c	Fri Oct 26 00:05:23 2001
++++ mopd-2.5.3/common/pf-linux.c	Fri Oct 26 00:25:14 2001
+@@ -31,6 +31,7 @@
+  */
+ 
+ #include <stdio.h>
++#include <syslog.h>
+ #include <sys/types.h>
+ #include <sys/time.h>
+ #include <sys/ioctl.h>
+@@ -133,7 +134,7 @@ int typ, mode;
+ 
+     prot = ((typ == 2) ? htons(ETH_P_802_2) : htons(protocol));
+     if ((s = socket(AF_INET, SOCK_PACKET, prot)) < 0) {
+-      perror(interface);
++      syslog(LOG_ERR, "pfInit: %s: socket: %m", interface);
+       return(-1);
+     }
+     if (s >= 32) {
+@@ -178,7 +179,7 @@ u_char *addr;
+   strcpy(ifr.ifr_name, interface);
+   ifr.ifr_addr.sa_family = AF_INET;
+   if (ioctl(s, SIOCGIFHWADDR, &ifr) < 0) {
+-    perror("SIOCGIFHWADDR");
++    syslog(LOG_ERR, "pfEthAddr: %s: SIOCGIFHWADDR: %m", interface);
+     return(-1);
+   }
+   memcpy((char *)addr, ifr.ifr_hwaddr.sa_data, 6);
+@@ -205,7 +206,7 @@ u_char *addr;
+ #ifdef	UPFILT
+   /* get the real interface name */
+   if (ioctl(s, EIOCIFNAME, &ifr) < 0) {
+-    perror("EIOCIFNAME");
++    syslog(LOG_ERR, "pfAddMulti: %s: EIOCIFNAME: %m", interface);
+     return(-1);
+   }
+ #endif	UPFILT
+@@ -220,11 +221,11 @@ u_char *addr;
+    *
+    */
+   if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+-    perror("socket()");
++    syslog(LOG_ERR, "pfAddMulti: %s: socket: %m", interface);
+     return(-1);
+   }
+   if (ioctl(sock, SIOCADDMULTI, (caddr_t)&ifr) < 0) {
+-    perror("SIOCADDMULTI");
++    syslog(LOG_ERR, "pfAddMulti: %s: SIOCADDMULTI: %m", interface);
+     close(sock);
+     return(-1);
+   }
+@@ -258,11 +259,11 @@ u_char *addr;
+    *
+    */
+   if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+-    perror("socket()");
++    syslog(LOG_ERR, "pfDelMulti: %s: socket: %m", interface);
+     return(-1);
+   }
+   if (ioctl(sock, SIOCDELMULTI, (caddr_t)&ifr) < 0) {
+-    perror("SIOCDELMULTI");
++    syslog(LOG_ERR, "pfDelMulti: %s: SIOCDELMULTI: %m", interface);
+     close(sock);
+     return(-1);
+   }

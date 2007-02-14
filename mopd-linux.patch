@@ -1,0 +1,1471 @@
+diff -up --recursive --new-file mopd-2.5.3.macro/Makefile mopd-2.5.3/Makefile
+--- mopd-2.5.3.macro/Makefile	1996-08-16 22:38:14.000000000 +0000
++++ mopd-2.5.3/Makefile	2001-10-27 19:51:19.000000000 +0000
+@@ -1,5 +1,16 @@
+-#	$Id$
++AR = ar
++CC = gcc
++RANLIB = ranlib
+ 
+-SUBDIR=	mopd mopprobe moptrace mopchk mopa.out
++CFLAGS = -O2 -g
++LDFLAGS =
+ 
+-.include <bsd.subdir.mk>
++SUBDIRS = common mopd mopchk mopprobe moptrace
++
++all clean: 
++	@for dir in $(SUBDIRS); do \
++		(cd $$dir && \
++		 $(MAKE) "AR=$(AR)" "CC=$(CC)" "RANLIB=$(RANLIB)" \
++			 "CFLAGS=$(CFLAGS)" "LDFLAGS=$(LDFLAGS)" $@) || \
++		 exit 1; \
++	done
+diff -up --recursive --new-file mopd-2.5.3.macro/Makefile.inc mopd-2.5.3/Makefile.inc
+--- mopd-2.5.3.macro/Makefile.inc	1996-01-28 18:47:57.000000000 +0000
++++ mopd-2.5.3/Makefile.inc	1970-01-01 00:00:00.000000000 +0000
+@@ -1,4 +0,0 @@
+-#	from: @(#)Makefile.inc	5.1 (Berkeley) 5/11/90
+-#	$Id$
+-
+-BINDIR?=	/usr/sbin
+diff -up --recursive --new-file mopd-2.5.3.macro/README-0 mopd-2.5.3/README-0
+--- mopd-2.5.3.macro/README-0	1970-01-01 00:00:00.000000000 +0000
++++ mopd-2.5.3/README-0	1997-01-12 04:27:21.000000000 +0000
+@@ -0,0 +1,19 @@
++This is a port of Mats O Jansson's mopd to linux, special thanx to David 
++Hornsby from the University of Melbourne for the use of pf.c from the 
++arns package.
++
++I have booted test images on my Vaxstation 3100 from my PC running Linux 
++2.0.20 with an AE-2 NE2000 compatable card. There are bound to be bugs, 
++especially with dealing with different network cards etc. Please report 
++any bugs you find in this linux version to me and I will do the best I 
++can to fix them. 
++
++To compile mopd, simply go into the directory and type 'make'. The man 
++files have also been included from the BSD version of mopd.
++
++Enjoy
++
++Karl Maftoum
++
++u963870@student.canberra.edu.au
++
+diff -up --recursive --new-file mopd-2.5.3.macro/common/Makefile mopd-2.5.3/common/Makefile
+--- mopd-2.5.3.macro/common/Makefile	1970-01-01 00:00:00.000000000 +0000
++++ mopd-2.5.3/common/Makefile	2001-10-27 19:41:26.000000000 +0000
+@@ -0,0 +1,21 @@
++LIBS = libcommon.a
++OBJS = cmp.o device.o dl.o file.o get.o loop-bsd.o mopdef.o nma.o pf-linux.o \
++	pf.o print.o put.o rc.o version.o
++
++CPPFLAGS =
++
++all: $(LIBS)
++
++libcommon.a: $(OBJS)
++	-rm -f libcommon.a
++	$(AR) cru libcommon.a $(OBJS)
++	$(RANLIB) libcommon.a
++
++.c.o:
++	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
++	
++version.c: VERSION
++	sed 's/.*/char version[] = "&";/' < VERSION > version.c
++	
++clean: 
++	rm -f core *.a *.o version.c
+diff -up --recursive --new-file mopd-2.5.3.macro/common/device.c mopd-2.5.3/common/device.c
+--- mopd-2.5.3.macro/common/device.c	1996-08-08 00:01:54.000000000 +0000
++++ mopd-2.5.3/common/device.c	2001-10-27 18:49:32.000000000 +0000
+@@ -32,8 +32,8 @@ static char rcsid[] = "$Id: device.c,v 1
+ #endif
+ 
+ #include "os.h"
+-#include "common/common.h"
+-#include "common/mopdef.h"
++#include "common.h"
++#include "mopdef.h"
+ 
+ struct	if_info *iflist;		/* Interface List		*/
+ 
+@@ -147,6 +147,13 @@ deviceOpen(ifname, proto, trans)
+ 
+ #ifdef	DEV_NEW_CONF
+ 		deviceEthAddr(p->if_name,&p->eaddr[0]);
++#elif	defined(__linux__)
++		{
++			int s;
++			s = socket(AF_INET,SOCK_DGRAM,0);
++			pfEthAddr(s,p->if_name,&p->eaddr[0]);
++			(void) close(s);
++		}
+ #else
+ 		p->eaddr[0]= tmp.eaddr[0];
+ 		p->eaddr[1]= tmp.eaddr[1];
+@@ -206,7 +213,11 @@ deviceInitOne(ifname)
+ 
+ 	/* Ok, get transport information */
+ 	
++#ifdef __linux__
++	trans = TRANS_ETHER+TRANS_8023+TRANS_AND; 
++#else
+ 	trans = pfTrans(interface);
++#endif
+ 
+ #ifndef NORC
+ 	/* Start with MOP Remote Console */
+diff -up --recursive --new-file mopd-2.5.3.macro/common/dl.c mopd-2.5.3/common/dl.c
+--- mopd-2.5.3.macro/common/dl.c	1996-08-05 07:39:01.000000000 +0000
++++ mopd-2.5.3/common/dl.c	2001-10-27 18:49:32.000000000 +0000
+@@ -32,9 +32,9 @@ static char rcsid[] = "$Id: dl.c,v 1.7 1
+ #endif
+ 
+ #include "os.h"
+-#include "common/get.h"
+-#include "common/print.h"
+-#include "common/mopdef.h"
++#include "get.h"
++#include "print.h"
++#include "mopdef.h"
+ 
+ void
+ mopDumpDL(fd, pkt, trans)
+diff -up --recursive --new-file mopd-2.5.3.macro/common/file.c mopd-2.5.3/common/file.c
+--- mopd-2.5.3.macro/common/file.c	1996-08-16 22:39:41.000000000 +0000
++++ mopd-2.5.3/common/file.c	2001-10-27 21:45:14.000000000 +0000
+@@ -32,8 +32,8 @@ static char rcsid[] = "$Id: file.c,v 1.4
+ #endif
+ 
+ #include "os.h"
+-#include "common/common.h"
+-#include "common/mopdef.h"
++#include "common.h"
++#include "mopdef.h"
+ 
+ #ifndef NOAOUT
+ #if defined(__NetBSD__) || defined(__OpenBSD__)
+@@ -50,6 +50,8 @@ static char rcsid[] = "$Id: file.c,v 1.4
+ #endif
+ #endif
+ 
++int fileinfo;
++
+ void
+ mopFilePutLX(buf, index, value, cnt)
+ 	u_char	*buf;
+@@ -129,11 +131,11 @@ CheckMopFile(fd)
+ 	u_char	header[512];
+ 	short	image_type;
+ 
++	(void)lseek(fd, (off_t) 0, SEEK_SET);
++
+ 	if (read(fd, header, 512) != 512)
+ 		return(-1);
+ 
+-	(void)lseek(fd, (off_t) 0, SEEK_SET);
+-
+ 	image_type = (u_short)(header[IHD_W_ALIAS+1]*256 +
+ 			       header[IHD_W_ALIAS]);
+ 
+@@ -162,6 +164,8 @@ GetMopFileInfo(fd, load, xfr)
+ 	short	image_type;
+ 	u_long	load_addr, xfr_addr, isd, iha, hbcnt, isize;
+ 
++	(void)lseek(fd, (off_t) 0, SEEK_SET);
++
+ 	if (read(fd, header, 512) != 512)
+ 		return(-1);
+ 
+@@ -184,43 +188,43 @@ GetMopFileInfo(fd, load, xfr)
+ 				    header[iha+IHA_L_TFRADR1+2]*0x10000 +
+ 				    header[iha+IHA_L_TFRADR1+1]*0x100 +
+ 				    header[iha+IHA_L_TFRADR1]) & 0x7fffffff;
+-#ifdef INFO
+-			printf("Native Image (VAX)\n");
+-			printf("Header Block Count: %d\n",hbcnt);
+-			printf("Image Size:         %08x\n",isize);
+-			printf("Load Address:       %08x\n",load_addr);
+-			printf("Transfer Address:   %08x\n",xfr_addr);
+-#endif
++			if (fileinfo) {
++				printf("Native Image (VAX)\n");
++				printf("Header Block Count: %d\n",hbcnt);
++				printf("Image Size:         %08x\n",isize);
++				printf("Load Address:       %08x\n",load_addr);
++				printf("Transfer Address:   %08x\n",xfr_addr);
++			}
+ 			break;
+ 		case IHD_C_RSX:			/* RSX image produced by TKB */
+ 			hbcnt = header[L_BBLK+1]*256 + header[L_BBLK];
+ 			isize = (header[L_BLDZ+1]*256 + header[L_BLDZ]) * 64;
+ 			load_addr = header[L_BSA+1]*256 + header[L_BSA];
+ 			xfr_addr  = header[L_BXFR+1]*256 + header[L_BXFR];
+-#ifdef INFO
+-			printf("RSX Image\n");
+-			printf("Header Block Count: %d\n",hbcnt);
+-			printf("Image Size:         %08x\n",isize);
+-			printf("Load Address:       %08x\n",load_addr);
+-			printf("Transfer Address:   %08x\n",xfr_addr);
+-#endif
++			if (fileinfo) {
++				printf("RSX Image\n");
++				printf("Header Block Count: %d\n",hbcnt);
++				printf("Image Size:         %08x\n",isize);
++				printf("Load Address:       %08x\n",load_addr);
++				printf("Transfer Address:   %08x\n",xfr_addr);
++			}
+ 			break;
+ 		case IHD_C_BPA:			/* BASIC plus analog         */
+-#ifdef INFO
+-			printf("BASIC-Plus Image, not supported\n");
+-#endif
++			if (fileinfo) {
++				printf("BASIC-Plus Image, not supported\n");
++			}
+ 			return(-1);
+ 			break;
+ 		case IHD_C_ALIAS:		/* Alias		     */
+-#ifdef INFO
+-			printf("Alias, not supported\n");
+-#endif
++			if (fileinfo) {
++				printf("Alias, not supported\n");
++			}
+ 			return(-1);
+ 			break;
+ 		case IHD_C_CLI:			/* Image is CLI		     */
+-#ifdef INFO
+-			printf("CLI, not supported\n");
+-#endif
++			if (fileinfo) {
++				printf("CLI, not supported\n");
++			}
+ 			return(-1);
+ 			break;
+ 		case IHD_C_PMAX:		/* PMAX system image	     */
+@@ -237,13 +241,13 @@ GetMopFileInfo(fd, load, xfr)
+ 				    header[iha+IHA_L_TFRADR1+2]*0x10000 +
+ 				    header[iha+IHA_L_TFRADR1+1]*0x100 +
+ 				    header[iha+IHA_L_TFRADR1]);
+-#ifdef INFO
+-			printf("PMAX Image \n");
+-			printf("Header Block Count: %d\n",hbcnt);
+-			printf("Image Size:         %08x\n",isize);
+-			printf("Load Address:       %08x\n",load_addr);
+-			printf("Transfer Address:   %08x\n",xfr_addr);
+-#endif
++			if (fileinfo) {
++				printf("PMAX Image \n");
++				printf("Header Block Count: %d\n",hbcnt);
++				printf("Image Size:         %08x\n",isize);
++				printf("Load Address:       %08x\n",load_addr);
++				printf("Transfer Address:   %08x\n",xfr_addr);
++			}
+ 			break;
+ 		case IHD_C_ALPHA:		/* ALPHA system image	     */
+ 			isd = (header[EIHD_L_ISDOFF+3]*0x1000000 +
+@@ -260,18 +264,18 @@ GetMopFileInfo(fd, load, xfr)
+ 				 header[isd+EISD_L_SECSIZE]);
+ 			load_addr = 0;
+ 			xfr_addr = 0;
+-#ifdef INFO
+-			printf("Alpha Image \n");
+-			printf("Header Block Count: %d\n",hbcnt);
+-			printf("Image Size:         %08x\n",isize);
+-			printf("Load Address:       %08x\n",load_addr);
+-			printf("Transfer Address:   %08x\n",xfr_addr);
+-#endif
++			if (fileinfo) {
++				printf("Alpha Image \n");
++				printf("Header Block Count: %d\n",hbcnt);
++				printf("Image Size:         %08x\n",isize);
++				printf("Load Address:       %08x\n",load_addr);
++				printf("Transfer Address:   %08x\n",xfr_addr);
++			}
+ 			break;
+ 		default:
+-#ifdef INFO
+-			printf("Unknown Image (%d)\n",image_type);
+-#endif
++			if (fileinfo) {
++				printf("Unknown Image (%d)\n",image_type);
++			}
+ 			return(-1);
+ 	}
+ 
+@@ -412,17 +416,15 @@ CheckAOutFile(fd)
+ 	struct exec ex, ex_swap;
+ 	int	mid = -1;
+ 
++	(void)lseek(fd, (off_t) 0, SEEK_SET);
++	
+ /*###416 [cc] `fd' undeclared (first use this function)%%%*/
+ 	if (read(fd, (char *)&ex, sizeof(ex)) != sizeof(ex))
+ 		return(-1);
+ 
+-	(void)lseek(fd, (off_t) 0, SEEK_SET);
+-	
+-	if (read(fd, (char *)&ex_swap, sizeof(ex_swap)) != sizeof(ex_swap))
+-		return(-1);
++	bcopy(&ex, &ex_swap, sizeof(ex_swap));
++	mopFileSwapX((u_char *)&ex_swap, 0, 4);
+ 
+-	(void)lseek(fd, (off_t) 0, SEEK_SET);
+-	
+ 	mid = getMID(mid, N_GETMID (ex));
+ 
+ 	if (mid == -1) {
+@@ -452,14 +454,12 @@ GetAOutFileInfo(fd, load, xfr, a_text, a
+ 	int	mid = -1;
+ 	u_long	magic, clbytes, clofset;
+ 
+-	if (read(fd, (char *)&ex, sizeof(ex)) != sizeof(ex))
+-		return(-1);
+-
+ 	(void)lseek(fd, (off_t) 0, SEEK_SET);
+ 
+-	if (read(fd, (char *)&ex_swap, sizeof(ex_swap)) != sizeof(ex_swap))
++	if (read(fd, (char *)&ex, sizeof(ex)) != sizeof(ex))
+ 		return(-1);
+ 
++	bcopy(&ex, &ex_swap, sizeof(ex_swap));
+ 	mopFileSwapX((u_char *)&ex_swap, 0, 4);
+ 
+ 	mid = getMID(mid, N_GETMID (ex));
+@@ -526,83 +526,83 @@ GetAOutFileInfo(fd, load, xfr, a_text, a
+ /*###525 [cc] syntax error before `}'%%%*/
+ 	}
+ 
+-#ifdef INFO
+-	printf("a.out image (");
+-	switch (N_GETMID (ex)) {
+-	case MID_I386:
+-		printf("i386");
+-		break;
++	if (fileinfo) {
++		printf("a.out image (");
++		switch (N_GETMID (ex)) {
++		case MID_I386:
++			printf("i386");
++			break;
+ #ifdef MID_M68K
+-	case MID_M68K:
+-		printf("m68k");
+-		break;
++		case MID_M68K:
++			printf("m68k");
++			break;
+ #endif
+ #ifdef MID_M68K4K
+-	case MID_M68K4K:
+-		printf("m68k 4k");
+-		break;
++		case MID_M68K4K:
++			printf("m68k 4k");
++			break;
+ #endif
+ #ifdef MID_NS32532
+-	case MID_NS32532:
+-		printf("pc532");
+-		break;
++		case MID_NS32532:
++			printf("pc532");
++			break;
+ #endif
+-	case MID_SPARC:
+-		printf("sparc");
+-		break;
++		case MID_SPARC:
++			printf("sparc");
++			break;
+ #ifdef MID_PMAX
+-	case MID_PMAX:
+-		printf("pmax");
+-		break;
++		case MID_PMAX:
++			printf("pmax");
++			break;
+ #endif
+ #ifdef MID_VAX
+-	case MID_VAX:
+-		printf("vax");
+-		break;
++		case MID_VAX:
++			printf("vax");
++			break;
+ #endif
+ #ifdef MID_ALPHA
+-	case MID_ALPHA:
+-		printf("alpha");
+-		break;
++		case MID_ALPHA:
++			printf("alpha");
++			break;
+ #endif
+ #ifdef MID_MIPS
+-	case MID_MIPS:
+-		printf("mips");
+-		break;
++		case MID_MIPS:
++			printf("mips");
++			break;
+ #endif
+ #ifdef MID_ARM6
+-	case MID_ARM6:
+-		printf("arm32");
+-		break;
++		case MID_ARM6:
++			printf("arm32");
++			break;
+ #endif
+-	default:
+-	}
+-	printf(") Magic: ");
+-	switch (N_GETMAGIC (ex)) {
+-	case OMAGIC:
+-		printf("OMAGIC");
+-		break;
+-	case NMAGIC:
+-		printf("NMAGIC");
+-		break;
+-	case ZMAGIC:
+-		printf("ZMAGIC");
+-		break;
+-	case QMAGIC:
+-		printf("QMAGIC");
+-		break;
+-	default:
+-		printf("Unknown %d",N_GETMAGIC (ex));
++		default: break;
++		}
++		printf(") Magic: ");
++		switch (N_GETMAGIC (ex)) {
++		case OMAGIC:
++			printf("OMAGIC");
++			break;
++		case NMAGIC:
++			printf("NMAGIC");
++			break;
++		case ZMAGIC:
++			printf("ZMAGIC");
++			break;
++		case QMAGIC:
++			printf("QMAGIC");
++			break;
++		default:
++			printf("Unknown %d",N_GETMAGIC (ex));
++		}
++		printf("\n");
++		printf("Size of text:       %08x\n",ex.a_text);
++		printf("Size of data:       %08x\n",ex.a_data);
++		printf("Size of bss:        %08x\n",ex.a_bss);
++		printf("Size of symbol tab: %08x\n",ex.a_syms);
++		printf("Transfer Address:   %08x\n",ex.a_entry);
++		printf("Size of reloc text: %08x\n",ex.a_trsize);
++		printf("Size of reloc data: %08x\n",ex.a_drsize);
+ 	}
+-	printf("\n");
+-	printf("Size of text:       %08x\n",ex.a_text);
+-	printf("Size of data:       %08x\n",ex.a_data);
+-	printf("Size of bss:        %08x\n",ex.a_bss);
+-	printf("Size of symbol tab: %08x\n",ex.a_syms);
+-	printf("Transfer Address:   %08x\n",ex.a_entry);
+-	printf("Size of reloc text: %08x\n",ex.a_trsize);
+-	printf("Size of reloc data: %08x\n",ex.a_drsize);
+-#endif
+ 	magic = N_GETMAGIC (ex);
+ 	clbytes = getCLBYTES(mid);
+ 	clofset = clbytes - 1;
+diff -up --recursive --new-file mopd-2.5.3.macro/common/file.h mopd-2.5.3/common/file.h
+--- mopd-2.5.3.macro/common/file.h	1996-08-13 18:36:33.000000000 +0000
++++ mopd-2.5.3/common/file.h	2001-10-27 20:49:08.000000000 +0000
+@@ -33,6 +33,8 @@
+ #ifndef _FILE_H_
+ #define _FILE_H_
+ 
++extern int fileinfo;
++
+ #ifdef NO__P
+ void	mopFilePutLX   (/* u_char *, int, u_long, int */);
+ void	mopFilePutBX   (/* u_char *, int, u_long, int */);
+diff -up --recursive --new-file mopd-2.5.3.macro/common/get.c mopd-2.5.3/common/get.c
+--- mopd-2.5.3.macro/common/get.c	1996-03-31 18:52:56.000000000 +0000
++++ mopd-2.5.3/common/get.c	2001-10-27 18:27:16.000000000 +0000
+@@ -32,7 +32,7 @@ static char rcsid[] = "$Id: get.c,v 1.5 
+ #endif
+ 
+ #include <sys/types.h>
+-#include "common/mopdef.h"
++#include "mopdef.h"
+ 
+ u_char
+ mopGetChar(pkt, index)
+diff -up --recursive --new-file mopd-2.5.3.macro/common/loop-bsd.c mopd-2.5.3/common/loop-bsd.c
+--- mopd-2.5.3.macro/common/loop-bsd.c	1996-08-16 22:41:43.000000000 +0000
++++ mopd-2.5.3/common/loop-bsd.c	2001-10-27 18:49:32.000000000 +0000
+@@ -37,13 +37,15 @@ static char rcsid[] = "$Id: loop-bsd.c,v
+ #if defined(__bsdi__) || defined(__FreeBSD__)
+ #include <sys/time.h>
+ #endif
++#if !defined(__linux__)
+ #include <net/bpf.h>
++#endif
+ #include <sys/ioctl.h>
+ #include <sys/errno.h>
+ 
+ #include "os.h"
+-#include "common/common.h"
+-#include "common/mopdef.h"
++#include "common.h"
++#include "mopdef.h"
+ 
+ int
+ mopOpenRC(p, trans)
+@@ -110,12 +112,16 @@ Loop()
+ 		syslog(LOG_ERR, "no interfaces");
+ 		exit(0);
+ 	}
++#ifndef __linux__
+ 	if (iflist->fd != -1) {
+ 		if (ioctl(iflist->fd, BIOCGBLEN, (caddr_t) & bufsize) < 0) {
+ 			syslog(LOG_ERR, "BIOCGBLEN: %m");
+ 			exit(0);
+ 	        }
+ 	}
++#else
++	bufsize = 8192;
++#endif
+ 	buf = (u_char *) malloc((unsigned) bufsize);
+ 	if (buf == 0) {
+ 		syslog(LOG_ERR, "malloc: %m");
+@@ -166,6 +172,7 @@ Loop()
+ #define bhp ((struct bpf_hdr *)bp)
+ 			bp = buf;
+ 			ep = bp + cc;
++#ifndef __linux__
+ 			while (bp < ep) {
+ 				register int caplen, hdrlen;
+ 
+@@ -174,6 +181,11 @@ Loop()
+ 				mopProcess(ii, bp + hdrlen);
+ 				bp += BPF_WORDALIGN(hdrlen + caplen);
+ 			}
++#else
++			if (bp < ep) {
++				mopProcess(ii,buf);
++			}
++#endif
+ 		}
+ 	}
+ }
+diff -up --recursive --new-file mopd-2.5.3.macro/common/mopdef.c mopd-2.5.3/common/mopdef.c
+--- mopd-2.5.3.macro/common/mopdef.c	1995-10-02 16:50:37.000000000 +0000
++++ mopd-2.5.3/common/mopdef.c	2001-10-27 18:27:24.000000000 +0000
+@@ -32,7 +32,7 @@ static char rcsid[] = "$Id: mopdef.c,v 1
+ #endif
+ 
+ #define MOPDEF_SURPESS_EXTERN
+-#include "common/mopdef.h"
++#include "mopdef.h"
+ 
+ char dl_mcst[6] = MOP_DL_MULTICAST;	/* Dump/Load Multicast         */
+ char rc_mcst[6] = MOP_RC_MULTICAST;	/* Remote Console Multicast    */
+diff -up --recursive --new-file mopd-2.5.3.macro/common/nma.c mopd-2.5.3/common/nma.c
+--- mopd-2.5.3.macro/common/nma.c	1995-09-28 13:38:45.000000000 +0000
++++ mopd-2.5.3/common/nma.c	2001-10-27 18:27:27.000000000 +0000
+@@ -32,7 +32,7 @@ static char rcsid[] = "$Id: nma.c,v 1.5 
+ #endif
+ 
+ #include <stddef.h>
+-#include "common/nmadef.h"
++#include "nmadef.h"
+ 
+ struct commDev {
+ 	int		val;
+diff -up --recursive --new-file mopd-2.5.3.macro/common/os.h mopd-2.5.3/common/os.h
+--- mopd-2.5.3.macro/common/os.h	1995-08-05 18:54:02.000000000 +0000
++++ mopd-2.5.3/common/os.h	2001-10-25 22:19:18.000000000 +0000
+@@ -33,8 +33,20 @@
+ #ifndef _OS_H_
+ #define _OS_H_
+ 
++#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
++#define DEV_NEW_CONF
++#endif
++
++#if defined(__linux__)
++#define SETPGRP_NOPARAM
++#endif
++
+ #include <stdio.h>
+ 
++#ifndef FILENAME_MAX
++#define FILENAME_MAX 255			/* SunOS 4 is missing it */
++#endif
++
+ #include <syslog.h>
+ #include <signal.h>
+ #include <sys/types.h>
+@@ -42,16 +54,24 @@
+ #include <errno.h>
+ #include <sys/socket.h>
+ #include <net/if.h>
++#ifdef DEV_NEW_CONF
+ #include <net/if_dl.h>
+ #include <net/if_types.h>
++#endif
+ #include <sys/ioctl.h>
+ #include <stdlib.h>
+ #include <sys/time.h>
+ #include <time.h>
+ #include <fcntl.h>
++#if defined(sun)
++#include <string.h>
++#else
+ #include <strings.h>
++#endif
+ #include <unistd.h>
+ 
+-#define  DEV_NEW_CONF
++#if defined(sun)
++typedef int ssize_t;
++#endif
+ 
+ #endif _OS_H_
+diff -up --recursive --new-file mopd-2.5.3.macro/common/pf-linux.c mopd-2.5.3/common/pf-linux.c
+--- mopd-2.5.3.macro/common/pf-linux.c	1970-01-01 00:00:00.000000000 +0000
++++ mopd-2.5.3/common/pf-linux.c	2001-10-27 18:49:32.000000000 +0000
+@@ -0,0 +1,357 @@
++/*
++ * General Purpose AppleTalk Packet Filter Interface
++ *
++ * Copyright (c) 1992-1995, The University of Melbourne.
++ * All Rights Reserved.  Permission to redistribute or
++ * use any part of this software for any purpose must
++ * be obtained in writing from the copyright owner.
++ *
++ * This software is supplied "as is" without express
++ * or implied warranty.
++ *
++ * djh@munnari.OZ.AU
++ *
++ * Supports:
++ *	Linux SOCK_PACKET
++ *	
++ * $Author$
++ * $Revision$
++ *
++ *
++ * Modified for use with the linux-mopd port by Karl Maftoum 
++ * u963870@student.canberra.edu.au
++ *
++ */
++
++#ifdef __linux__
++
++/*
++ * include header files
++ *
++ */
++
++#include <stdio.h>
++#include <sys/types.h>
++#include <sys/time.h>
++#include <sys/ioctl.h>
++#include <sys/file.h>
++#include <sys/socket.h>
++#include <net/if.h>
++#include <sys/errno.h>
++#include <linux/if_ether.h>
++#include <netdb.h>
++#include <ctype.h>
++#include <netinet/in.h>
++#include <unistd.h>
++#include <string.h>
++
++/*
++ * map compatible functions
++ *
++ */
++
++#ifdef	MAPFUNCS
++#define	bcopy(a,b,l)	memcpy((char *)(b),(char *)(a),(l))
++#define	bcmp(a,b,l)	memcmp((char *)(a),(char *)(b),(l))
++#define	bzero(a,l)	memset((char *)(a),0,(l))
++#define	rindex(s,c)	strrchr((char *)(s),(c))
++#define	index(s,c)	strchr((char *)(s),(c))
++#endif	MAPFUNCS
++
++/*
++ * select common modules
++ *
++ */
++
++
++#define	USE_SADDMULTI
++
++/*
++ * definitions
++ *
++ */
++
++#define	READBUFSIZ	4096
++#define	NUMRDS		32
++
++struct RDS {
++  u_short dataLen;
++  u_char *dataPtr;
++};
++
++/*
++ * variables
++ *
++ */
++
++struct socklist {
++  int iflen;
++  struct sockaddr sa;
++} socklist[32];
++
++struct ifreq ifr;
++extern int errno;
++extern int promisc;
++
++struct RDS RDS[NUMRDS];
++
++/*
++ * establish protocol filter
++ *
++ */
++
++int
++setup_pf(s, prot, typ)
++int s, typ;
++u_short prot;
++{
++  int ioarg;
++  u_short offset;
++  return(0);
++}
++
++/*
++ * Open and initialize packet filter
++ * for a particular protocol type.
++ *
++ */
++
++
++int
++pfInit(interface, mode, protocol, typ)
++char *interface;
++u_short protocol;
++int typ, mode;
++{
++  int s;
++  int ioarg;
++  char device[64];
++  unsigned long if_flags;
++
++
++  { u_short prot;
++
++    prot = ((typ == 2) ? htons(ETH_P_802_2) : htons(protocol));
++    if ((s = socket(AF_INET, SOCK_PACKET, prot)) < 0) {
++      perror(interface);
++      return(-1);
++    }
++    if (s >= 32) {
++      close(s);
++      return(-1);
++    }
++  }
++
++  /*
++   * set filter for protocol and type (IPTalk, Phase 1/2)
++   *
++   */
++
++  if (setup_pf(s, protocol, typ) < 0)
++    return(-1);
++
++  /*
++   * set options, bind to underlying interface
++   *
++   */
++
++  strncpy(ifr.ifr_name, interface, sizeof(ifr.ifr_name));
++
++  /* record socket interface name and length */
++  strncpy(socklist[s].sa.sa_data, interface, sizeof(socklist[s].sa.sa_data));
++  socklist[s].iflen = strlen(interface);
++
++  return(s);
++}
++
++/*
++ * get the interface ethernet address
++ *
++ */
++
++int
++pfEthAddr(s, interface, addr)
++int s;
++char *interface;
++u_char *addr;
++{
++  strcpy(ifr.ifr_name, interface);
++  ifr.ifr_addr.sa_family = AF_INET;
++  if (ioctl(s, SIOCGIFHWADDR, &ifr) < 0) {
++    perror("SIOCGIFHWADDR");
++    return(-1);
++  }
++  memcpy((char *)addr, ifr.ifr_hwaddr.sa_data, 6);
++  return(0);
++}
++
++/*
++ * add a multicast address to the interface
++ *
++ */
++
++int
++pfAddMulti(s, interface, addr)
++int s;
++char *interface;
++u_char *addr;
++{
++  int sock;
++
++#ifdef	USE_SADDMULTI
++
++  strcpy(ifr.ifr_name, interface);
++
++#ifdef	UPFILT
++  /* get the real interface name */
++  if (ioctl(s, EIOCIFNAME, &ifr) < 0) {
++    perror("EIOCIFNAME");
++    return(-1);
++  }
++#endif	UPFILT
++
++
++
++  ifr.ifr_addr.sa_family = AF_UNSPEC;
++  bcopy((char *)addr, ifr.ifr_addr.sa_data, 6);
++
++  /*
++   * open a socket, temporarily, to use for SIOC* ioctls
++   *
++   */
++  if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
++    perror("socket()");
++    return(-1);
++  }
++  if (ioctl(sock, SIOCADDMULTI, (caddr_t)&ifr) < 0) {
++    perror("SIOCADDMULTI");
++    close(sock);
++    return(-1);
++  }
++  close(sock);
++#endif	USE_SADDMULTI
++  return(0);
++}
++
++/*
++ * delete a multicast address from the interface
++ *
++ */
++
++int
++pfDelMulti(s, interface, addr)
++int s;
++char *interface;
++u_char *addr;
++{
++  int sock;
++
++#ifdef	USE_SADDMULTI
++
++  strcpy(ifr.ifr_name, interface);
++
++  ifr.ifr_addr.sa_family = AF_UNSPEC;
++  bcopy((char *)addr, ifr.ifr_addr.sa_data, 6);
++
++  /*
++   * open a socket, temporarily, to use for SIOC* ioctls
++   *
++   */
++  if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
++    perror("socket()");
++    return(-1);
++  }
++  if (ioctl(sock, SIOCDELMULTI, (caddr_t)&ifr) < 0) {
++    perror("SIOCDELMULTI");
++    close(sock);
++    return(-1);
++  }
++  close(sock);
++#endif	USE_SADDMULTI
++
++
++  return(0);
++}
++
++/*
++ * return 1 if ethernet interface capable of multiple opens
++ *
++ */
++
++int
++eth_mopen(phase)
++int phase;
++{
++  if (phase == 2)
++    return(0);
++  return(1);
++}
++
++/*
++ * read a packet
++ * Read Data Structure describes packet(s) received
++ *
++ */
++
++
++
++
++int
++pfRead(fd, buf, len)
++int fd, len;
++u_char *buf;
++{
++  int i, cc;
++
++  int fromlen;
++  struct sockaddr sa;
++
++  RDS[0].dataLen = 0;
++  fromlen = sizeof(struct sockaddr);
++
++  if ((cc = recvfrom(fd, (char *)buf, len, 0, &sa, &fromlen)) <= 0)
++    return(cc);
++
++  /* check if from right interface */
++  for (i = socklist[fd].iflen-1; i >= 0; i--)
++    if (sa.sa_data[i] != socklist[fd].sa.sa_data[i])
++      return(0);
++
++  RDS[0].dataLen = cc;
++  RDS[0].dataPtr = buf;
++  RDS[1].dataLen = 0;
++
++  return(cc);
++}
++
++/*
++ * write a packet
++ *
++ */
++
++int
++pfWrite(fd, buf, len)
++int fd, len;
++u_char *buf;
++{
++
++#ifdef	USE_WRITEV
++  struct iovec iov[2];
++  iov[0].iov_base = (caddr_t)buf;
++  iov[0].iov_len = 14;
++  iov[1].iov_base = (caddr_t)buf+14;
++  iov[1].iov_len = len-14;
++
++  if (writev(fd, iov, 2) == len)
++    return(len);
++
++#endif	USE_WRITEV
++
++
++  if (sendto(fd, buf, len, 0, &socklist[fd].sa, sizeof(struct sockaddr)) == len)
++    return(len);
++
++  return(-1);
++}
++
++#endif /* __linux__ */
+diff -up --recursive --new-file mopd-2.5.3.macro/common/pf.c mopd-2.5.3/common/pf.c
+--- mopd-2.5.3.macro/common/pf.c	1996-08-06 14:20:27.000000000 +0000
++++ mopd-2.5.3/common/pf.c	2001-10-27 18:27:34.000000000 +0000
+@@ -31,6 +31,8 @@
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++#ifndef __linux__
++
+ #ifndef LINT
+ static char rcsid[] = "$Id$";
+ #endif
+@@ -58,7 +60,7 @@ static char rcsid[] = "$Id: pf.c,v 1.16 
+ #include <syslog.h>
+ #include <varargs.h>
+ 
+-#include "common/mopdef.h"
++#include "mopdef.h"
+ 
+ /*
+  * Variables
+@@ -277,3 +279,4 @@ pfWrite(fd, buf, len, trans)
+ 	return(-1);
+ }
+ 
++#endif /* !__linux__ */
+diff -up --recursive --new-file mopd-2.5.3.macro/common/print.c mopd-2.5.3/common/print.c
+--- mopd-2.5.3.macro/common/print.c	1996-08-16 22:42:26.000000000 +0000
++++ mopd-2.5.3/common/print.c	2001-10-27 18:27:40.000000000 +0000
+@@ -35,11 +35,11 @@ static char rcsid[] = "$Id: print.c,v 1.
+ #include <stdio.h>
+ 
+ #include "os.h"
+-#include "common/mopdef.h"
+-#include "common/nmadef.h"
+-#include "common/nma.h"
+-#include "common/cmp.h"
+-#include "common/get.h"
++#include "mopdef.h"
++#include "nmadef.h"
++#include "nma.h"
++#include "cmp.h"
++#include "get.h"
+ 
+ #define SHORT_PRINT
+ 
+diff -up --recursive --new-file mopd-2.5.3.macro/common/put.c mopd-2.5.3/common/put.c
+--- mopd-2.5.3.macro/common/put.c	1996-08-16 22:43:15.000000000 +0000
++++ mopd-2.5.3/common/put.c	2001-10-27 18:27:44.000000000 +0000
+@@ -34,7 +34,7 @@ static char rcsid[] = "$Id: put.c,v 1.5 
+ #include <stddef.h>
+ #include <sys/types.h>
+ #include <time.h>
+-#include "common/mopdef.h"
++#include "mopdef.h"
+ 
+ void
+ mopPutChar(pkt, index, value)
+diff -up --recursive --new-file mopd-2.5.3.macro/common/rc.c mopd-2.5.3/common/rc.c
+--- mopd-2.5.3.macro/common/rc.c	1995-10-13 19:26:23.000000000 +0000
++++ mopd-2.5.3/common/rc.c	2001-10-27 18:49:32.000000000 +0000
+@@ -32,9 +32,9 @@ static char rcsid[] = "$Id: rc.c,v 1.8 1
+ #endif
+ 
+ #include "os.h"
+-#include "common/get.h"
+-#include "common/print.h"
+-#include "common/mopdef.h"
++#include "get.h"
++#include "print.h"
++#include "mopdef.h"
+ 
+ void
+ mopDumpRC(fd, pkt, trans)
+diff -up --recursive --new-file mopd-2.5.3.macro/mopa.out/Makefile mopd-2.5.3/mopa.out/Makefile
+--- mopd-2.5.3.macro/mopa.out/Makefile	1996-08-16 22:44:52.000000000 +0000
++++ mopd-2.5.3/mopa.out/Makefile	2002-11-17 14:54:22.000000000 +0000
+@@ -1,10 +1,19 @@
++PROGS = mopa.out
++OBJS = mopa.out.o
++LIBS = ../common/libcommon.a
+ 
+-#	$Id$
++CPPFLAGS = -I..
+ 
+-PROG=	mopa.out
+-SRCS=	mopa.out.c file.c
++all: $(PROGS)
+ 
+-CFLAGS+= -I${.CURDIR} -I${.CURDIR}/.. -I${.CURDIR}/../common
+-.PATH:	${.CURDIR}/../common
++mopa.out: $(OBJS) $(LIBS)
++	$(CC) $(CFLAGS) $(LDFLAGS) -o mopa.out $(OBJS) $(LIBS)
+ 
+-.include <bsd.prog.mk>
++../common/libcommon.a:
++	cd ../common && $(MAKE) libcommon.a
++
++.c.o:
++	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
++
++clean:
++	rm -f core $(PROGS) *.o
+diff -up --recursive --new-file mopd-2.5.3.macro/mopa.out/mopa.out.c mopd-2.5.3/mopa.out/mopa.out.c
+--- mopd-2.5.3.macro/mopa.out/mopa.out.c	1996-08-16 22:45:27.000000000 +0000
++++ mopd-2.5.3/mopa.out/mopa.out.c	2001-10-27 18:55:02.000000000 +0000
+@@ -50,10 +50,6 @@
+ static char rcsid[] = "$Id$";
+ #endif
+ 
+-#include "os.h"
+-#include "common/common.h"
+-#include "common/mopdef.h"
+-#include "common/file.h"
+ #if defined(__NetBSD__) || defined(__OpenBSD__)
+ #include <sys/exec_aout.h>
+ #endif
+@@ -68,20 +64,24 @@ static char rcsid[] = "$Id: mopa.out.c,v
+ #define MID_VAX 140
+ #endif
+ 
++#include <common/os.h>
++#include <common/common.h>
++#include <common/mopdef.h>
++#include <common/file.h>
++
+ u_char header[512];		/* The VAX header we generate is 1 block. */
+ struct exec ex, ex_swap;
+ 
+ int
+ main (int argc, char **argv)
+ {
+-	FILE   *out;		/* A FILE because that is easier. */
+-	int	i;
+-	struct dllist dl;
+-	
+ #ifdef NOAOUT
+ 	fprintf(stderr, "%s: has no function in OS/BSD\n", argv[0]);
+ 	return(1);
+-#endif	
++#else
++	FILE   *out;		/* A FILE because that is easier. */
++	int	i;
++	struct dllist dl;
+ 
+ 	if (argc != 3) {
+ 		fprintf (stderr, "usage: %s kernel-in sys-out\n", argv[0]);
+@@ -151,4 +151,7 @@ main (int argc, char **argv)
+ 	}
+ 	
+ 	fclose (out);
++
++	return (0);
++#endif	
+ }
+diff -up --recursive --new-file mopd-2.5.3.macro/mopchk/Makefile mopd-2.5.3/mopchk/Makefile
+--- mopd-2.5.3.macro/mopchk/Makefile	1996-08-16 22:46:38.000000000 +0000
++++ mopd-2.5.3/mopchk/Makefile	2002-11-17 14:55:42.000000000 +0000
+@@ -1,18 +1,19 @@
+-#	$Id$
++PROGS = mopchk
++OBJS = mopchk.o
++LIBS = ../common/libcommon.a
+ 
+-PROG=	mopchk
+-SRCS=	mopchk.c device.c version.c pf.c loop-bsd.c file.c
+-CFLAGS+= -I${.CURDIR} -I${.CURDIR}/.. -I${.CURDIR}/../common -DINFO
+-CLEANFILES= version.c version.h
+-LDADD=	-lkvm
+-.PATH:	${.CURDIR}/.. ${.CURDIR}/../common 
+-
+-version.c version.h: ${.CURDIR}/../common/VERSION
+-	rm -f version.c; \
+-	sed 's/.*/char version[] = "&";/' ${.ALLSRC} > version.c
+-	set `sed 's/\([0-9]*\)\.\([0-9]*\).*/\1 \2/' ${.ALLSRC}` ; \
+-		{ echo '#define VERSION_MAJOR' $$1 ; \
+-		  echo '#define VERSION_MINOR' $$2 ; } > version.h
++CPPFLAGS = -I..
+ 
++all: $(PROGS)
+ 
+-.include <bsd.prog.mk>
++mopchk: $(OBJS) $(LIBS)
++	$(CC) $(CFLAGS) $(LDFLAGS) -o mopchk $(OBJS) $(LIBS)
++
++../common/libcommon.a:
++	cd ../common && $(MAKE) libcommon.a
++
++.c.o:
++	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
++
++clean:
++	rm -f core $(PROGS) *.o
+diff -up --recursive --new-file mopd-2.5.3.macro/mopchk/mopchk.c mopd-2.5.3/mopchk/mopchk.c
+--- mopd-2.5.3.macro/mopchk/mopchk.c	1996-08-16 22:47:15.000000000 +0000
++++ mopd-2.5.3/mopchk/mopchk.c	2001-10-27 21:08:11.000000000 +0000
+@@ -37,12 +37,12 @@ static char rcsid[] = "$Id: mopchk.c,v 1
+  * Usage:	mopchk [-a] [-v] [filename...]
+  */
+ 
+-#include "os.h"
+-#include "common/common.h"
+-#include "common/mopdef.h"
+-#include "common/device.h"
+-#include "common/pf.h"
+-#include "common/file.h"
++#include <common/os.h>
++#include <common/common.h>
++#include <common/mopdef.h>
++#include <common/device.h>
++#include <common/pf.h>
++#include <common/file.h>
+ 
+ /*
+  * The list of all interfaces that are being listened to.  rarp_loop()
+@@ -62,7 +62,8 @@ int     AllFlag = 0;		/* listen on "all"
+ int	VersionFlag = 0;	/* Show version */
+ int	promisc = 0;		/* promisc mode not needed */
+ char	*Program;
+-char	version[];
++
++extern char version[];
+ 
+ void
+ main(argc, argv)
+@@ -100,6 +101,8 @@ main(argc, argv)
+ 			/* NOTREACHED */
+ 		}
+ 	}
++
++	fileinfo = 1;
+ 	
+ 	if (VersionFlag)
+ 		printf("%s: Version %s\n",Program,version);
+diff -up --recursive --new-file mopd-2.5.3.macro/mopd/Makefile mopd-2.5.3/mopd/Makefile
+--- mopd-2.5.3.macro/mopd/Makefile	1996-08-16 22:36:26.000000000 +0000
++++ mopd-2.5.3/mopd/Makefile	2002-11-17 14:56:16.000000000 +0000
+@@ -1,20 +1,19 @@
+-#	$Id$
++PROGS = mopd
++OBJS = mopd.o process.o
++LIBS = ../common/libcommon.a
+ 
+-PROG=	mopd
+-SRCS=	mopd.c process.c print.c cmp.c get.c put.c mopdef.c nma.c device.c \
+-	version.c pf.c loop-bsd.c dl.c rc.c file.c
+-MAN=	mopd.8
+-CFLAGS+= -I${.CURDIR} -I${.CURDIR}/.. -I${.CURDIR}/../common
+-CLEANFILES= version.c version.h
+-LDADD=	-lkvm
+-.PATH:	${.CURDIR}/../common
+-
+-version.c version.h: ${.CURDIR}/../common/VERSION
+-	rm -f version.c; \
+-	sed 's/.*/char version[] = "&";/' ${.ALLSRC} > version.c
+-	set `sed 's/\([0-9]*\)\.\([0-9]*\).*/\1 \2/' ${.ALLSRC}` ; \
+-		{ echo '#define VERSION_MAJOR' $$1 ; \
+-		  echo '#define VERSION_MINOR' $$2 ; } > version.h
++CPPFLAGS = -I..
+ 
++all: $(PROGS)
+ 
+-.include <bsd.prog.mk>
++mopd: $(OBJS) $(LIBS)
++	$(CC) $(CFLAGS) $(LDFLAGS) -o mopd $(OBJS) $(LIBS)
++
++../common/libcommon.a:
++	cd ../common && $(MAKE) libcommon.a
++
++.c.o:
++	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
++
++clean:
++	rm -f core $(PROGS) *.o
+diff -up --recursive --new-file mopd-2.5.3.macro/mopd/mopd.c mopd-2.5.3/mopd/mopd.c
+--- mopd-2.5.3.macro/mopd/mopd.c	1996-03-31 19:21:00.000000000 +0000
++++ mopd-2.5.3/mopd/mopd.c	2001-10-27 18:42:06.000000000 +0000
+@@ -38,16 +38,16 @@ static char rcsid[] = "$Id: mopd.c,v 1.1
+  *		mopd [ -d -f -v ] [ -3 | -4 ] interface
+  */
+ 
+-#include "os.h"
+-#include "common/common.h"
+-#include "common/mopdef.h"
+-#include "common/device.h"
+-#include "common/print.h"
+-#include "common/pf.h"
+-#include "common/cmp.h"
+-#include "common/get.h"
+-#include "common/dl.h"
+-#include "common/rc.h"
++#include <common/os.h>
++#include <common/common.h>
++#include <common/mopdef.h>
++#include <common/device.h>
++#include <common/print.h>
++#include <common/pf.h>
++#include <common/cmp.h>
++#include <common/get.h>
++#include <common/dl.h>
++#include <common/rc.h>
+ #include "process.h"
+ 
+ /*
+diff -up --recursive --new-file mopd-2.5.3.macro/mopd/process.c mopd-2.5.3/mopd/process.c
+--- mopd-2.5.3.macro/mopd/process.c	1996-08-22 17:07:38.000000000 +0000
++++ mopd-2.5.3/mopd/process.c	2001-10-27 18:49:32.000000000 +0000
+@@ -31,18 +31,19 @@
+ static char rcsid[] = "$Id$";
+ #endif
+ 
+-#include "os.h"
+-#include "common/common.h"
+-#include "common/mopdef.h"
+-#include "common/nmadef.h"
+-#include "common/get.h"
+-#include "common/put.h"
+-#include "common/print.h"
+-#include "common/pf.h"
+-#include "common/cmp.h"
+-#include "common/dl.h"
+-#include "common/rc.h"
+-#include "common/file.h"
++#include <common/os.h>
++#include <common/common.h>
++#include <common/mopdef.h>
++#include <common/nmadef.h>
++#include <common/get.h>
++#include <common/put.h>
++#include <common/print.h>
++#include <common/pf.h>
++#include <common/cmp.h>
++#include <common/dl.h>
++#include <common/rc.h>
++#include <common/file.h>
++#include "process.h"
+ 
+ extern u_char	buf[];
+ extern int	DebugFlag;
+diff -up --recursive --new-file mopd-2.5.3.macro/mopprobe/Makefile mopd-2.5.3/mopprobe/Makefile
+--- mopd-2.5.3.macro/mopprobe/Makefile	1996-08-16 22:48:44.000000000 +0000
++++ mopd-2.5.3/mopprobe/Makefile	2002-11-17 14:56:33.000000000 +0000
+@@ -1,17 +1,19 @@
+-#	$Id$
++PROGS = mopprobe
++OBJS = mopprobe.o
++LIBS = ../common/libcommon.a
+ 
+-PROG=	mopprobe
+-SRCS=	mopprobe.c device.c get.c cmp.c mopdef.c version.c pf.c loop-bsd.c
+-CFLAGS+= -I${.CURDIR} -I${.CURDIR}/.. -I${.CURDIR}/../common -DNODL
+-CLEANFILES= version.c version.h
+-LDADD=	-lkvm
+-.PATH:	${.CURDIR}/../common 
+-
+-version.c version.h: ${.CURDIR}/../common/VERSION
+-	rm -f version.c; \
+-	sed 's/.*/char version[] = "&";/' ${.ALLSRC} > version.c
+-	set `sed 's/\([0-9]*\)\.\([0-9]*\).*/\1 \2/' ${.ALLSRC}` ; \
+-		{ echo '#define VERSION_MAJOR' $$1 ; \
+-		  echo '#define VERSION_MINOR' $$2 ; } > version.h
++CPPFLAGS = -I..
+ 
+-.include <bsd.prog.mk>
++all: $(PROGS)
++
++mopprobe: $(OBJS) $(LIBS)
++	$(CC) $(CFLAGS) $(LDFLAGS) -o mopprobe $(OBJS) $(LIBS)
++
++../common/libcommon.a:
++	cd ../common && $(MAKE) libcommon.a
++
++.c.o:
++	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
++
++clean:
++	rm -f core $(PROGS) *.o
+diff -up --recursive --new-file mopd-2.5.3.macro/mopprobe/mopprobe.c mopd-2.5.3/mopprobe/mopprobe.c
+--- mopd-2.5.3.macro/mopprobe/mopprobe.c	1996-08-11 22:31:43.000000000 +0000
++++ mopd-2.5.3/mopprobe/mopprobe.c	2001-10-27 18:50:09.000000000 +0000
+@@ -38,15 +38,15 @@ static char rcsid[] = "$Id: mopprobe.c,v
+  *		mopprobe [ -3 | -4 ] interface
+  */
+ 
+-#include "os.h"
+-#include "common/common.h"
+-#include "common/mopdef.h"
+-#include "common/device.h"
+-#include "common/print.h"
+-#include "common/get.h"
+-#include "common/cmp.h"
+-#include "common/pf.h"
+-#include "common/nmadef.h"
++#include <common/os.h>
++#include <common/common.h>
++#include <common/mopdef.h>
++#include <common/device.h>
++#include <common/print.h>
++#include <common/get.h>
++#include <common/cmp.h>
++#include <common/pf.h>
++#include <common/nmadef.h>
+ 
+ /*
+  * The list of all interfaces that are being listened to.  rarp_loop()
+diff -up --recursive --new-file mopd-2.5.3.macro/moptrace/Makefile mopd-2.5.3/moptrace/Makefile
+--- mopd-2.5.3.macro/moptrace/Makefile	1996-08-16 22:49:27.000000000 +0000
++++ mopd-2.5.3/moptrace/Makefile	2002-11-17 14:56:54.000000000 +0000
+@@ -1,20 +1,19 @@
+-#	$Id$
++PROGS = moptrace
++OBJS = moptrace.o
++LIBS = ../common/libcommon.a
+ 
+-PROG=	moptrace
+-SRCS=	moptrace.c print.c cmp.c get.c mopdef.c nma.c device.c version.c pf.c \
+-	loop-bsd.c dl.c rc.c
+-MAN=	moptrace.1
+-CFLAGS+= -I${.CURDIR} -I${.CURDIR}/.. -I${.CURDIR}/../common
+-CLEANFILES= version.c version.h
+-LDADD=	-lkvm
+-.PATH:	${.CURDIR}/../common
+-
+-version.c version.h: ${.CURDIR}/../common/VERSION
+-	rm -f version.c; \
+-	sed 's/.*/char version[] = "&";/' ${.ALLSRC} > version.c
+-	set `sed 's/\([0-9]*\)\.\([0-9]*\).*/\1 \2/' ${.ALLSRC}` ; \
+-		{ echo '#define VERSION_MAJOR' $$1 ; \
+-		  echo '#define VERSION_MINOR' $$2 ; } > version.h
++CPPFLAGS = -I..
+ 
++all: $(PROGS)
+ 
+-.include <bsd.prog.mk>
++moptrace: $(OBJS) $(LIBS)
++	$(CC) $(CFLAGS) $(LDFLAGS) -o moptrace $(OBJS) $(LIBS)
++
++../common/libcommon.a:
++	cd ../common && $(MAKE) libcommon.a
++
++.c.o:
++	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
++
++clean:
++	rm -f core $(PROGS) *.o
+diff -up --recursive --new-file mopd-2.5.3.macro/moptrace/moptrace.c mopd-2.5.3/moptrace/moptrace.c
+--- mopd-2.5.3.macro/moptrace/moptrace.c	1996-08-07 22:48:04.000000000 +0000
++++ mopd-2.5.3/moptrace/moptrace.c	2001-10-27 18:50:29.000000000 +0000
+@@ -38,15 +38,15 @@ static char rcsid[] = "$Id: moptrace.c,v
+  *		moptrace [ -d ] [ -3 | -4 ] interface
+  */
+ 
+-#include "os.h"
+-#include "common/common.h"
+-#include "common/mopdef.h"
+-#include "common/device.h"
+-#include "common/print.h"
+-#include "common/pf.h"
+-#include "common/dl.h"
+-#include "common/rc.h"
+-#include "common/get.h"
++#include <common/os.h>
++#include <common/common.h>
++#include <common/mopdef.h>
++#include <common/device.h>
++#include <common/print.h>
++#include <common/pf.h>
++#include <common/dl.h>
++#include <common/rc.h>
++#include <common/get.h>
+ 
+ /*
+  * The list of all interfaces that are being listened to. 

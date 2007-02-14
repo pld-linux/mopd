@@ -1,0 +1,122 @@
+--- mopd-2.5.4.orig/mopd/process.c
++++ mopd-2.5.4/mopd/process.c
+@@ -30,6 +30,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
++#include <string.h>
+ #ifndef lint
+ static char rcsid[]="$NetBSD: process.c,v 1.7 2000/06/27 18:57:41 ragge Exp $";
+ #endif
+@@ -461,6 +462,7 @@
+ 	int     i,nfd,iindex;
+ 	struct dllist dl,*dl_rpr;
+ 	u_char  rpr_pgty,load;
++	char *ptr;
+ 
+ 	if ((DebugFlag == DEBUG_ONELINE)) {
+ 		mopPrintOneline(stdout, pkt, trans);
+@@ -532,10 +534,22 @@
+ 		memmove((char *)(dl_rpr->eaddr), (char *)src, 6);
+ 		mopProcessInfo(pkt,index,moplen,dl_rpr,trans);
+ 
+-		sprintf(filename,"%s/%s.SYS", MOP_FILE_PATH, pfile);
++ 		ptr = pfile + strlen (pfile) - strlen(".sys");
++ 		if ( ! strstr(ptr, ".SYS")  && ! strstr(ptr, ".sys") ) {
++ 			sprintf(filename,"%s/%s.SYS", MOP_FILE_PATH, pfile);
++ 		}
++ 		else {	
++ 			sprintf(filename,"%s/%s", MOP_FILE_PATH, pfile);
++ 		}
++
+ 		if ((mopCmpEAddr(dst,dl_mcst) == 0)) {
+ 			if ((nfd = open(filename, O_RDONLY, 0)) != -1) {
+ 				close(nfd);
++ 				printf("My address is "
++ 					"%02x:%02x:%02x:%02x:%02x:%02x\n",
++ 					ii->eaddr[0], ii->eaddr[1],
++ 					ii->eaddr[2], ii->eaddr[3],
++ 					ii->eaddr[4], ii->eaddr[5]);
+ 				mopSendASV(src, ii->eaddr, ii, trans);
+ 				sprintf(line,
+ 					"%x:%x:%x:%x:%x:%x (%d) Do you have %s? (Yes)",
+--- mopd-2.5.4.orig/Makefile
++++ mopd-2.5.4/Makefile
+@@ -9,6 +9,12 @@
+ 	  (cd $$dir; make CFLAGS=$(CFLAGS) ) ;	\
+ 	done
+
++install:	
++	install -d $(DESTDIR)/usr/sbin/
++	install -m0755 mopd/mopd $(DESTDIR)/usr/sbin/
++	install -m0755 mopchk/mopchk $(DESTDIR)/usr/sbin/
++	install -m0755 mopprobe/mopprobe $(DESTDIR)/usr/sbin/
++	install -m0755 moptrace/moptrace $(DESTDIR)/usr/sbin/
+
+ clean:
+ 	for dir in ${SUBDIRS} ;	\
+--- mopd-2.5.4.orig/common/pf.h
++++ mopd-2.5.4/common/pf.h
+@@ -38,7 +38,7 @@
+ __BEGIN_DECLS
+ int	pfTrans	   __P((char *));
+ int	pfInit     __P((char *, int, u_short, int));
+-int	pfEthAddr  __P((int, u_char *));
++int	pfEthAddr  __P((int, u_char *, u_char *));
+ int	pfAddMulti __P((int, char *, char *));
+ int	pfDelMulti __P((int, char *, char *));
+ int	pfRead     __P((int, u_char *, int));
+--- mopd-2.5.4.orig/common/pf-linux2.c
++++ mopd-2.5.4/common/pf-linux2.c
+@@ -14,7 +14,7 @@
+  * Supports:
+  *	Linux SOCK_PACKET
+  *	
+- * $Author$
++ * $Author$
+  * $Revision$
+  *
+  *
+--- mopd-2.5.4.orig/common/device.c
++++ mopd-2.5.4/common/device.c
+@@ -104,6 +104,7 @@
+ 	int	 trans;
+ {
+ 	struct if_info *p, tmp;
++	int s;
+ 
+ 	strcpy(tmp.if_name,ifname);
+ 	tmp.iopen   = pfInit;
+@@ -140,14 +141,21 @@
+ 		p->fd      = tmp.fd;
+ 
+ #ifdef	DEV_NEW_CONF
++#error Does not work
+ 		deviceEthAddr(p->if_name,&p->eaddr[0]);
+ #else
++		s = socket(AF_INET, SOCK_DGRAM, 0);
++		pfEthAddr(s, p->if_name, &p->eaddr[0]);
++		(void) close(s);
++
++#if 0
+ 		p->eaddr[0]= tmp.eaddr[0];
+ 		p->eaddr[1]= tmp.eaddr[1];
+ 		p->eaddr[2]= tmp.eaddr[2];
+ 		p->eaddr[3]= tmp.eaddr[3];
+ 		p->eaddr[4]= tmp.eaddr[4];
+ 		p->eaddr[5]= tmp.eaddr[5];
++#endif
+ #endif	/* DEV_NEW_CONF */
+ 	
+ 	}
+--- mopd-2.5.4.orig/common/loop-linux2.c
++++ mopd-2.5.4/common/loop-linux2.c
+@@ -28,7 +28,7 @@
+  */
+ 
+ #ifndef LINT
+-static char rcsid[] = "$Id$";
++static char rcsid[] = "$Id$";
+ #endif
+ 
+ #include <stdlib.h>

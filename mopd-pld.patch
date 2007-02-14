@@ -1,0 +1,33 @@
+diff -ur mopd-2.5.3/common/common.h mopd-2.5.3.pld/common/common.h
+--- mopd-2.5.3/common/common.h	2007-02-14 19:36:11.000000000 +0100
++++ mopd-2.5.3.pld/common/common.h	2007-02-14 19:35:48.000000000 +0100
+@@ -43,7 +43,7 @@
+ #endif
+ 
+ #ifndef MOP_FILE_PATH
+-#define MOP_FILE_PATH	"/tftpboot/mop"
++#define MOP_FILE_PATH	"/var/lib/mop"
+ #endif
+ 
+ #define DEBUG_ONELINE	1
+diff -ur mopd-2.5.3/mopd/mopd.8 mopd-2.5.3.pld/mopd/mopd.8
+--- mopd-2.5.3/mopd/mopd.8	2007-02-14 19:38:01.000000000 +0100
++++ mopd-2.5.3.pld/mopd/mopd.8	2007-02-14 19:38:42.000000000 +0100
+@@ -53,7 +53,7 @@
+ Upon receiving a request, 
+ .Nm
+ checks if the requested file exists in
+-.Pa /tftpboot/mop , 
++.Pa /var/lib/mop , 
+ the filename is normaly uppercase and with an extension of
+ .Pa .SYS .
+ If the filename isn't given, the ethernet address of the target is used as
+@@ -87,7 +87,7 @@
+ .El
+ .Sh FILES
+ .Bl -tag -width Pa -compact
+-.It Pa /tftpboot/mop
++.It Pa /var/lib/mop
+ .El
+ .Sh SEE ALSO
+ .Xr bpf 4 ,

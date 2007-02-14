@@ -1,0 +1,150 @@
+diff -ur mopd-2.5.3.orig/common/cmp.h mopd-2.5.3/common/cmp.h
+--- mopd-2.5.3.orig/common/cmp.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/cmp.h	2007-02-14 19:06:19.000000000 +0100
+@@ -39,4 +39,4 @@
+ int	mopCmpEAddr __P((u_char *,u_char *));
+ __END_DECLS
+ 
+-#endif _CMP_H_
++#endif
+diff -ur mopd-2.5.3.orig/common/common.h mopd-2.5.3/common/common.h
+--- mopd-2.5.3.orig/common/common.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/common.h	2007-02-14 19:06:40.000000000 +0100
+@@ -109,4 +109,4 @@
+ 	u_long	addr;			/* Current relative address	*/
+ };
+ 
+-#endif _COMMON_H_
++#endif
+diff -ur mopd-2.5.3.orig/common/device.h mopd-2.5.3/common/device.h
+--- mopd-2.5.3.orig/common/device.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/device.h	2007-02-14 19:06:44.000000000 +0100
+@@ -50,4 +50,4 @@
+ void	mopReadRC __P((void));
+ __END_DECLS
+ 
+-#endif _DEVICE_H_
++#endif
+diff -ur mopd-2.5.3.orig/common/dl.h mopd-2.5.3/common/dl.h
+--- mopd-2.5.3.orig/common/dl.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/dl.h	2007-02-14 19:06:24.000000000 +0100
+@@ -39,4 +39,4 @@
+ void	mopDumpDL       __P((FILE *, u_char *, int));
+ __END_DECLS
+ 
+-#endif _DL_H_
++#endif
+diff -ur mopd-2.5.3.orig/common/file.h mopd-2.5.3/common/file.h
+--- mopd-2.5.3.orig/common/file.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/file.h	2007-02-14 19:06:29.000000000 +0100
+@@ -65,4 +65,4 @@
+ __END_DECLS
+ #endif
+ 
+-#endif _FILE_H_
++#endif
+diff -ur mopd-2.5.3.orig/common/get.h mopd-2.5.3/common/get.h
+--- mopd-2.5.3.orig/common/get.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/get.h	2007-02-14 19:06:34.000000000 +0100
+@@ -46,4 +46,4 @@
+ u_short	mopGetLength __P((u_char *, int));
+ __END_DECLS
+ 
+-#endif /* _GET_H_ */
++#endif
+diff -ur mopd-2.5.3.orig/common/mopdef.h mopd-2.5.3/common/mopdef.h
+--- mopd-2.5.3.orig/common/mopdef.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/mopdef.h	2007-02-14 19:06:52.000000000 +0100
+@@ -193,6 +193,6 @@
+ extern char dl_802_proto[];
+ extern char rc_802_proto[];
+ extern char lp_802_proto[];
+-#endif	MOPDEF_SUPRESS_EXTERN
++#endif
+ 
+-#endif _MOPDEF_H_
++#endif
+diff -ur mopd-2.5.3.orig/common/nma.h mopd-2.5.3/common/nma.h
+--- mopd-2.5.3.orig/common/nma.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/nma.h	2007-02-14 19:06:55.000000000 +0100
+@@ -40,4 +40,4 @@
+ char	*nmaGetDevice __P((int));
+ __END_DECLS
+ 
+-#endif _NMA_H_
++#endif
+diff -ur mopd-2.5.3.orig/common/nmadef.h mopd-2.5.3/common/nmadef.h
+--- mopd-2.5.3.orig/common/nmadef.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/nmadef.h	2007-02-14 19:06:58.000000000 +0100
+@@ -180,4 +180,4 @@
+ #define   NMA_C_SOFD_DW4   150	/* DSW-41/42 */
+ #define   NMA_C_SOFD_TRA   175	/* DETRA-AA */
+ 
+-#endif _NMADEF_H_
++#endif
+diff -ur mopd-2.5.3.orig/common/pf.h mopd-2.5.3/common/pf.h
+--- mopd-2.5.3.orig/common/pf.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/pf.h	2007-02-14 19:07:06.000000000 +0100
+@@ -45,4 +45,4 @@
+ int	pfWrite    __P((int, u_char *, int, int));
+ __END_DECLS
+ 
+-#endif _PF_H_
++#endif
+diff -ur mopd-2.5.3.orig/common/print.h mopd-2.5.3/common/print.h
+--- mopd-2.5.3.orig/common/print.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/print.h	2007-02-14 19:07:09.000000000 +0100
+@@ -48,4 +48,4 @@
+ 			       u_char, int));
+ __END_DECLS
+ 
+-#endif _PRINT_H_
++#endif
+diff -ur mopd-2.5.3.orig/common/put.h mopd-2.5.3/common/put.h
+--- mopd-2.5.3.orig/common/put.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/put.h	2007-02-14 19:07:14.000000000 +0100
+@@ -45,4 +45,4 @@
+ void	mopPutLength __P((u_char *, int, u_short));
+ __END_DECLS
+ 
+-#endif /* _PUT_H_ */
++#endif
+diff -ur mopd-2.5.3.orig/common/rc.h mopd-2.5.3/common/rc.h
+--- mopd-2.5.3.orig/common/rc.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/common/rc.h	2007-02-14 19:07:19.000000000 +0100
+@@ -39,4 +39,4 @@
+ void	mopDumpRC        __P((FILE *, u_char *, int));
+ __END_DECLS
+ 
+-#endif _RC_H_
++#endif
+diff -ur mopd-2.5.3.orig/mopd/process.h mopd-2.5.3/mopd/process.h
+--- mopd-2.5.3.orig/mopd/process.h	2007-02-14 19:05:46.000000000 +0100
++++ mopd-2.5.3/mopd/process.h	2007-02-14 19:07:42.000000000 +0100
+@@ -42,4 +42,4 @@
+ 			  u_char *, u_char *, int, u_short));
+ __END_DECLS
+ 
+-#endif _PROCESS_H_
++#endif
+diff -ur mopd-2.5.3.orig/common/file.c mopd-2.5.3/common/file.c
+--- mopd-2.5.3.orig/common/file.c	2007-02-14 19:08:29.000000000 +0100
++++ mopd-2.5.3/common/file.c	2007-02-14 19:09:56.000000000 +0100
+@@ -499,7 +499,7 @@
+ 	} else {
+ 		return(-1);
+ 	}
+-#endif NOAOUT
++#endif
+ }
+ 
+ /*###440 [cc] syntax error before `int'%%%*/
+@@ -721,7 +721,7 @@
+ 	}
+ 
+ 	return(0);
+-#endif NOAOUT
++#endif
+ }
+ 
+ #ifndef NOELF

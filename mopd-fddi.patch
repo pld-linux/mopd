@@ -1,0 +1,675 @@
+diff -up --recursive --new-file mopd-2.5.3.macro/common/device.c mopd-2.5.3/common/device.c
+--- mopd-2.5.3.macro/common/device.c	2002-11-17 12:50:33.000000000 +0000
++++ mopd-2.5.3/common/device.c	2002-11-17 13:05:38.000000000 +0000
+@@ -147,6 +147,7 @@ deviceOpen(ifname, proto, trans)
+ 		p->read    = tmp.read;
+ 		bzero((char *)p->eaddr,sizeof(p->eaddr));
+ 		p->fd      = tmp.fd;
++		p->trans   = trans;
+ 
+ #ifdef	DEV_NEW_CONF
+ 		deviceEthAddr(p->if_name,&p->eaddr[0]);
+@@ -218,17 +219,26 @@ deviceInitOne(ifname)
+ 
+ 	switch (trans) {
+ 	case TRANS_ETHER:
+-		deviceOpen(interface,MOP_K_PROTO_RC,TRANS_ETHER);
+-		break;
+ 	case TRANS_8023:
+-		deviceOpen(interface,MOP_K_PROTO_RC,TRANS_8023);
+-		break;
+-	case TRANS_ETHER+TRANS_8023:
+-		deviceOpen(interface,MOP_K_PROTO_RC,TRANS_ETHER);
+-		deviceOpen(interface,MOP_K_PROTO_RC,TRANS_8023);
+-		break;
+-	case TRANS_ETHER+TRANS_8023+TRANS_AND:
+-		deviceOpen(interface,MOP_K_PROTO_RC,TRANS_ETHER+TRANS_8023);
++	case TRANS_FDDI_8021H:
++	case TRANS_FDDI_8022:
++		deviceOpen(interface, MOP_K_PROTO_RC, trans);
++		break;
++	case TRANS_ETHER + TRANS_8023:
++		deviceOpen(interface, MOP_K_PROTO_RC, TRANS_ETHER);
++		deviceOpen(interface, MOP_K_PROTO_RC, TRANS_8023);
++		break;
++	case TRANS_FDDI_8021H + TRANS_FDDI_8022:
++		deviceOpen(interface, MOP_K_PROTO_RC, TRANS_FDDI_8021H);
++		deviceOpen(interface, MOP_K_PROTO_RC, TRANS_FDDI_8022);
++		break;
++	case TRANS_ETHER + TRANS_8023 + TRANS_AND:
++		deviceOpen(interface, MOP_K_PROTO_RC,
++			   TRANS_ETHER + TRANS_8023);
++		break;
++	case TRANS_FDDI_8021H + TRANS_FDDI_8022 + TRANS_AND:
++		deviceOpen(interface, MOP_K_PROTO_RC,
++			   TRANS_FDDI_8021H + TRANS_FDDI_8022);
+ 		break;
+ 	}
+ #endif
+@@ -238,17 +248,26 @@ deviceInitOne(ifname)
+ 
+ 	switch (trans) {
+ 	case TRANS_ETHER:
+-		deviceOpen(interface,MOP_K_PROTO_DL,TRANS_ETHER);
+-		break;
+ 	case TRANS_8023:
+-		deviceOpen(interface,MOP_K_PROTO_DL,TRANS_8023);
+-		break;
+-	case TRANS_ETHER+TRANS_8023:
+-		deviceOpen(interface,MOP_K_PROTO_DL,TRANS_ETHER);
+-		deviceOpen(interface,MOP_K_PROTO_DL,TRANS_8023);
+-		break;
+-	case TRANS_ETHER+TRANS_8023+TRANS_AND:
+-		deviceOpen(interface,MOP_K_PROTO_DL,TRANS_ETHER+TRANS_8023);
++	case TRANS_FDDI_8021H:
++	case TRANS_FDDI_8022:
++		deviceOpen(interface, MOP_K_PROTO_DL, trans);
++		break;
++	case TRANS_ETHER + TRANS_8023:
++		deviceOpen(interface, MOP_K_PROTO_DL, TRANS_ETHER);
++		deviceOpen(interface, MOP_K_PROTO_DL, TRANS_8023);
++		break;
++	case TRANS_FDDI_8021H + TRANS_FDDI_8022:
++		deviceOpen(interface, MOP_K_PROTO_DL, TRANS_FDDI_8021H);
++		deviceOpen(interface, MOP_K_PROTO_DL, TRANS_FDDI_8022);
++		break;
++	case TRANS_ETHER + TRANS_8023 + TRANS_AND:
++		deviceOpen(interface, MOP_K_PROTO_DL,
++			   TRANS_ETHER + TRANS_8023);
++		break;
++	case TRANS_FDDI_8021H + TRANS_FDDI_8022 + TRANS_AND:
++		deviceOpen(interface, MOP_K_PROTO_DL,
++			   TRANS_FDDI_8021H + TRANS_FDDI_8022);
+ 		break;
+ 	}
+ #endif
+diff -up --recursive --new-file mopd-2.5.3.macro/common/dl.c mopd-2.5.3/common/dl.c
+--- mopd-2.5.3.macro/common/dl.c	2001-10-27 19:14:58.000000000 +0000
++++ mopd-2.5.3/common/dl.c	2002-11-17 13:05:38.000000000 +0000
+@@ -50,13 +50,21 @@ mopDumpDL(fd, pkt, trans)
+ 	len = mopGetLength(pkt, trans);
+ 
+ 	switch (trans) {
++	case TRANS_ETHER:
++		index = 16;
++		moplen = len;
++		break;
+ 	case TRANS_8023:
+ 		index = 22;
+ 		moplen = len - 8;
+ 		break;
+-	default:
+-		index = 16;
++	case TRANS_FDDI_8021H:
++	case TRANS_FDDI_8022:
++		index = 23;
+ 		moplen = len;
++		break;
++	default:
++		moplen = 0;
+ 	}
+ 	if (moplen < 1)				/* broken packet */
+ 		return;
+diff -up --recursive --new-file mopd-2.5.3.macro/common/get.c mopd-2.5.3/common/get.c
+--- mopd-2.5.3.macro/common/get.c	2001-10-27 18:27:16.000000000 +0000
++++ mopd-2.5.3/common/get.c	2002-11-17 13:05:38.000000000 +0000
+@@ -94,15 +94,30 @@ mopGetTrans(pkt, trans)
+ {
+ 	u_short	*ptype;
+ 	
+-	if (trans == 0) {
++	if ((trans & (TRANS_ETHER + TRANS_8023))) {
+ 		ptype = (u_short *)(pkt+12);
+ 		if (ntohs(*ptype) < 1600) {
+-			trans = TRANS_8023;
++			trans &= TRANS_8023;
+ 		} else {
+-			trans = TRANS_ETHER;
++			trans &= TRANS_ETHER;
+ 		}
++		return(trans);
+ 	}
+-	return(trans);
++	if ((trans & (TRANS_FDDI_8021H + TRANS_FDDI_8022))) {
++		if (*pkt >= MOP_K_FDDI_FC_MIN && *pkt <= MOP_K_FDDI_FC_MAX) {
++			if (!bcmp((char *)(pkt+16), (char *)dl_802_proto, 3)) {
++				trans &= TRANS_FDDI_8022;
++				return(trans);
++			}
++			if (!bcmp((char *)(pkt+16),
++				  (char *)dl_8021h_proto, 3)) {
++				trans &= TRANS_FDDI_8021H;
++				return(trans);
++			}
++		}
++		return(0);
++	}
++	return(0);
+ }
+ 
+ void
+@@ -111,23 +126,35 @@ mopGetHeader(pkt, index, dst, src, proto
+ 	int	*index, *len, trans;
+ 	u_short	*proto;
+ {
+-	*dst = pkt;
+-	*src = pkt + 6;
+-	*index = *index + 12;
+-
+ 	switch(trans) {
+ 	case TRANS_ETHER:
++		*dst = pkt;
++		*src = pkt + 6;
++		*index = *index + 12;
+ 		*proto = (u_short)(pkt[*index]*256 + pkt[*index+1]);
+ 		*index = *index + 2;
+ 		*len   = (int)(pkt[*index+1]*256 + pkt[*index]);
+ 		*index = *index + 2;
+ 		break;
+ 	case TRANS_8023:
++		*dst = pkt;
++		*src = pkt + 6;
++		*index = *index + 12;
+ 		*len   = (int)(pkt[*index]*256 + pkt[*index+1]);
+ 		*index = *index + 8;
+ 		*proto = (u_short)(pkt[*index]*256 + pkt[*index+1]);
+ 		*index = *index + 2;
+ 		break;
++	case TRANS_FDDI_8021H:
++	case TRANS_FDDI_8022:
++		*dst = pkt + 1;
++		*src = pkt + 7;
++		*index = *index + 19;
++		*proto = (u_short)(pkt[*index]*256 + pkt[*index+1]);
++		*index = *index + 2;
++		*len   = (int)(pkt[*index+1]*256 + pkt[*index]);
++		*index = *index + 2;
++		break;
+ 	}
+ }
+ 
+@@ -143,6 +170,10 @@ mopGetLength(pkt, trans)
+ 	case TRANS_8023:
+ 		return(pkt[12]*256 + pkt[13]);
+ 		break;
++	case TRANS_FDDI_8021H:
++	case TRANS_FDDI_8022:
++		return(pkt[22]*256 + pkt[21]);
++		break;
+ 	}
+ 	return(0);
+ }
+diff -up --recursive --new-file mopd-2.5.3.macro/common/mopdef.c mopd-2.5.3/common/mopdef.c
+--- mopd-2.5.3.macro/common/mopdef.c	2001-10-27 18:27:24.000000000 +0000
++++ mopd-2.5.3/common/mopdef.c	2002-11-17 13:05:38.000000000 +0000
+@@ -39,6 +39,9 @@ char rc_mcst[6] = MOP_RC_MULTICAST;	/* R
+ char dl_802_proto[5] = MOP_K_PROTO_802_DL; /* MOP Dump/Load 802.2      */
+ char rc_802_proto[5] = MOP_K_PROTO_802_RC; /* MOP Remote Console 802.2 */
+ char lp_802_proto[5] = MOP_K_PROTO_802_LP; /* Loopback 802.2           */
++char dl_8021h_proto[5] = MOP_K_PROTO_8021H_DL; /* MOP Dump/Load 802.1H */
++char rc_8021h_proto[5] = MOP_K_PROTO_8021H_RC; /* MOP Remote Console 802.1H */
++char lp_8021h_proto[5] = MOP_K_PROTO_8021H_LP; /* Loopback 802.1H      */
+ 
+ int
+ mopdef_dummy()
+diff -up --recursive --new-file mopd-2.5.3.macro/common/mopdef.h mopd-2.5.3/common/mopdef.h
+--- mopd-2.5.3.macro/common/mopdef.h	1995-10-12 20:23:13.000000000 +0000
++++ mopd-2.5.3/common/mopdef.h	2002-11-16 21:58:47.000000000 +0000
+@@ -41,13 +41,24 @@
+ #define MOP_K_PROTO_802_RC	{ 0x08, 0x00, 0x2b, 0x60, 0x02 }
+ #define MOP_K_PROTO_802_LP	{ 0x08, 0x00, 0x2b, 0x90, 0x00 }
+ 
++#define MOP_K_PROTO_8021H_DL	{ 0x00, 0x00, 0x00, 0x60, 0x01 }
++#define MOP_K_PROTO_8021H_RC	{ 0x00, 0x00, 0x00, 0x60, 0x02 }
++#define MOP_K_PROTO_8021H_LP	{ 0x00, 0x00, 0x00, 0x90, 0x00 }
++
+ #define MOP_K_PROTO_802_DSAP	0xaa
+ #define MOP_K_PROTO_802_SSAP	0xaa
+ #define MOP_K_PROTO_802_CNTL	0x03
+ 
++#define MOP_K_FDDI_FC_MIN	0x50	/* Accepted frame types: async LLC */
++#define MOP_K_FDDI_FC_MAX	0x57
++
++#define MOP_K_FDDI_FC_DEF	0x54	/* Sent frame type: async4 LLC */
++
+ #define TRANS_ETHER		1	/* Packet in Ethernet format */
+ #define TRANS_8023		2	/* Packet in 802.3 format */
+-#define TRANS_AND		0x1000	/* Both Ethernet and 802.3 */
++#define TRANS_FDDI_8021H	4	/* Packet in FDDI 802.1H format */
++#define TRANS_FDDI_8022		8	/* Packet in FDDI 802.2 format */
++#define TRANS_AND		0x1000	/* All formats specified */
+ 
+ /* The following constants are defined in module MOPDEF.SDL in MOM */
+ 
+@@ -191,6 +202,9 @@ extern char rc_mcst[];
+ extern char dl_802_proto[];
+ extern char rc_802_proto[];
+ extern char lp_802_proto[];
++extern char dl_8021h_proto[];
++extern char rc_8021h_proto[];
++extern char lp_8021h_proto[];
+ #endif	MOPDEF_SUPRESS_EXTERN
+ 
+ #endif _MOPDEF_H_
+diff -up --recursive --new-file mopd-2.5.3.macro/common/pf-linux.c mopd-2.5.3/common/pf-linux.c
+--- mopd-2.5.3.macro/common/pf-linux.c	2002-11-17 13:05:11.000000000 +0000
++++ mopd-2.5.3/common/pf-linux.c	2002-11-17 13:05:38.000000000 +0000
+@@ -39,7 +39,8 @@
+ #include <sys/socket.h>
+ #include <net/if.h>
+ #include <sys/errno.h>
+-#include <linux/if_ether.h>
++#include <netinet/if_ether.h>
++#include <netinet/if_fddi.h>
+ #include <netdb.h>
+ #include <ctype.h>
+ #include <netinet/in.h>
+@@ -372,15 +373,37 @@ u_char *buf;
+ 
+ /*
+  * Return information to device.c how to open device.
+- * In this case the driver can handle both Ethernet type II and
+- * IEEE 802.3 frames (SNAP) in a single pfOpen.
++ * The driver requires a separate pfOpen for Ethernet type II
++ * and IEEE 802.3 frames (SNAP).
++ * The driver can handle FDDI IEEE 802.1H (SNAP, RFC1042) and
++ * IEEE 802.2 (SNAP) frames in a single pfOpen.
+  */
+ 
+ int
+ pfTrans(interface)
+ 	char *interface;
+ {
+-	return TRANS_ETHER+TRANS_8023;
++  int s, err;
++
++  strncpy(ifr.ifr_name, interface, sizeof (ifr.ifr_name) - 1);
++  ifr.ifr_name[sizeof(ifr.ifr_name)] = 0;
++  ifr.ifr_addr.sa_family = AF_INET;
++  s = socket(AF_INET,SOCK_DGRAM,0);
++  err = ioctl(s, SIOCGIFHWADDR, &ifr);
++  (void) close(s);
++  if (err < 0) {
++    syslog(LOG_ERR, "pfTrans: %s: SIOCGIFHWADDR: %m", interface);
++    exit(-1);
++  }
++
++  switch (ifr.ifr_hwaddr.sa_family) {
++  case ARPHRD_ETHER:
++    return TRANS_ETHER + TRANS_8023;
++  case ARPHRD_FDDI:
++    return TRANS_FDDI_8021H + TRANS_FDDI_8022 + TRANS_AND;
++  default:
++    return(0);
++  }
+ }
+ 
+ #endif /* __linux__ */
+diff -up --recursive --new-file mopd-2.5.3.macro/common/print.c mopd-2.5.3/common/print.c
+--- mopd-2.5.3.macro/common/print.c	2001-10-27 18:27:40.000000000 +0000
++++ mopd-2.5.3/common/print.c	2002-11-17 13:05:38.000000000 +0000
+@@ -145,18 +145,24 @@ mopPrintOneline(fd, pkt, trans)
+ 		}
+ 	}
+ 
+-	if (trans == TRANS_8023) {
++	switch (trans) {
++	case TRANS_ETHER:
++		(void)fprintf(fd, "EthII ");
++		break;
++	case TRANS_8023:
+ 		(void)fprintf(fd, "802.3 ");
++		break;
++	case TRANS_FDDI_8021H:
++		(void)fprintf(fd, "FDDI 802.1H ");
++		break;
++	case TRANS_FDDI_8022:
++		(void)fprintf(fd, "FDDI 802.2 ");
++		break;
+ 	}
+ 
+ 	mopPrintHWA(fd, src); (void)fprintf(fd," > ");
+ 	mopPrintHWA(fd, dst);
+-	if (len < 1600) {
+-        	(void)fprintf(fd, " len %4d code %02x ",len,code);
+-	} else {
+-		(void)fprintf(fd, " len %4d code %02x ",
+-			      (len % 256)*256 + (len /256), code);
+-	}
++       	(void)fprintf(fd, " len %4d code %02x ", len, code);
+ 
+ 	switch (proto) {
+ 	case MOP_K_PROTO_DL:
+@@ -279,37 +285,30 @@ mopPrintHeader(fd, pkt, trans)
+ 	(void)fprintf(fd,"Proto        : %04x ",proto);
+ 	switch (proto) {
+ 	case MOP_K_PROTO_DL:
+-		switch (trans) {
+-		case TRANS_8023:
+-			(void)fprintf(fd, "MOP Dump/Load (802.3)\n");
+-			break;
+-		default:
+-			(void)fprintf(fd, "MOP Dump/Load\n");
+-		}
++		(void)fprintf(fd, "MOP Dump/Load ");
+ 		break;
+ 	case MOP_K_PROTO_RC:
+-		switch (trans) {
+-		case TRANS_8023:
+-			(void)fprintf(fd, "MOP Remote Console (802.3)\n");
+-			break;
+-		default:
+-			(void)fprintf(fd, "MOP Remote Console\n");
+-		}
++		(void)fprintf(fd, "MOP Remote Console ");
+ 		break;
+ 	case MOP_K_PROTO_LP:
+-		switch (trans) {
+-		case TRANS_8023:
+-			(void)fprintf(fd, "MOP Loopback (802.3)\n");
+-			break;
+-		default:
+-			(void)fprintf(fd, "MOP Loopback\n");
+-		}
++		(void)fprintf(fd, "MOP Loopback ");
+ 		break;
+-	default:
+-		(void)fprintf(fd, "\n");
++	}
++	switch (trans) {
++	case TRANS_ETHER:
++		(void)fprintf(fd, "(EthII)");
++		break;
++	case TRANS_8023:
++		(void)fprintf(fd, "(802.3)");
++		break;
++	case TRANS_FDDI_8021H:
++		(void)fprintf(fd, "(FDDI 802.1H)");
++		break;
++	case TRANS_FDDI_8022:
++		(void)fprintf(fd, "(FDDI 802.2)");
+ 		break;
+ 	}
+-
++	(void)fprintf(fd, "\n");
+ 	
+         (void)fprintf(fd,"Length       : %04x (%d)\n",len,len);
+ }
+@@ -471,6 +470,10 @@ mopPrintInfo(fd, pkt, index, moplen, mop
+ 	case TRANS_8023:
+ 		moplen = moplen + 14;
+ 		break;
++	case TRANS_FDDI_8021H:
++	case TRANS_FDDI_8022:
++		moplen = moplen + 23;
++		break;
+ 	}
+ 
+ 	itype = mopGetShort(pkt,index); 
+diff -up --recursive --new-file mopd-2.5.3.macro/common/put.c mopd-2.5.3/common/put.c
+--- mopd-2.5.3.macro/common/put.c	2001-10-27 18:27:44.000000000 +0000
++++ mopd-2.5.3/common/put.c	2002-11-17 13:05:38.000000000 +0000
+@@ -126,13 +126,23 @@ mopPutHeader(pkt, index, dst, src, proto
+ 	int	 trans;
+ {
+ 	
++	if (trans == TRANS_FDDI_8021H || trans == TRANS_FDDI_8022)
++		mopPutChar (pkt, index, MOP_K_FDDI_FC_DEF);
+ 	mopPutMulti(pkt, index, dst, 6);
+ 	mopPutMulti(pkt, index, src, 6);
+-	if (trans == TRANS_8023) {
++	if (trans == TRANS_8023)
+ 		mopPutShort(pkt, index, 0);
++	if (trans != TRANS_ETHER) {
+ 		mopPutChar (pkt, index, MOP_K_PROTO_802_DSAP);
+ 		mopPutChar (pkt, index, MOP_K_PROTO_802_SSAP);
+ 		mopPutChar (pkt, index, MOP_K_PROTO_802_CNTL);
++	}
++	if (trans == TRANS_FDDI_8021H) {
++		mopPutChar (pkt, index, 0x00);
++		mopPutChar (pkt, index, 0x00);
++		mopPutChar (pkt, index, 0x00);
++	}
++	if (trans == TRANS_8023 || trans == TRANS_FDDI_8022) {
+ 		mopPutChar (pkt, index, 0x08);
+ 		mopPutChar (pkt, index, 0x00);
+ 		mopPutChar (pkt, index, 0x2b);
+@@ -141,15 +151,15 @@ mopPutHeader(pkt, index, dst, src, proto
+ 	mopPutChar(pkt, index, (proto / 256));
+ 	mopPutChar(pkt, index, (proto % 256));
+ #else
+-	if (trans == TRANS_8023) {
+-		mopPutChar(pkt, index, (proto / 256));
++	if (trans == TRANS_ETHER) {
+ 		mopPutChar(pkt, index, (proto % 256));
++		mopPutChar(pkt, index, (proto / 256));
+ 	} else {
+-		mopPutChar(pkt, index, (proto % 256));
+ 		mopPutChar(pkt, index, (proto / 256));
++		mopPutChar(pkt, index, (proto % 256));
+ 	}
+ #endif
+-	if (trans == TRANS_ETHER)
++	if (trans != TRANS_8023)
+ 		mopPutShort(pkt, index, 0);
+ 
+ }
+@@ -178,6 +188,12 @@ mopPutLength(pkt, trans, len)
+ 		mopPutChar(pkt, &index, ((len - 14) / 256));
+ #endif
+ 		break;
++	case TRANS_FDDI_8021H:
++	case TRANS_FDDI_8022:
++		index = 21;
++		mopPutChar(pkt, &index, ((len - 23) % 256));
++		mopPutChar(pkt, &index, ((len - 23) / 256));
++		break;
+ 	}
+ 
+ }
+diff -up --recursive --new-file mopd-2.5.3.macro/common/rc.c mopd-2.5.3/common/rc.c
+--- mopd-2.5.3.macro/common/rc.c	2001-10-27 19:14:58.000000000 +0000
++++ mopd-2.5.3/common/rc.c	2002-11-17 13:05:38.000000000 +0000
+@@ -50,13 +50,21 @@ mopDumpRC(fd, pkt, trans)
+ 	len = mopGetLength(pkt, trans);
+ 
+ 	switch (trans) {
++	case TRANS_ETHER:
++		index = 16;
++		moplen = len;
++		break;
+ 	case TRANS_8023:
+ 		index = 22;
+ 		moplen = len - 8;
+ 		break;
+-	default:
+-		index = 16;
++	case TRANS_FDDI_8021H:
++	case TRANS_FDDI_8022:
++		index = 23;
+ 		moplen = len;
++		break;
++	default:
++		moplen = 0;
+ 	}
+ 	if (moplen < 1)				/* broken packet */
+ 		return;
+diff -up --recursive --new-file mopd-2.5.3.macro/mopd/mopd.c mopd-2.5.3/mopd/mopd.c
+--- mopd-2.5.3.macro/mopd/mopd.c	2001-10-27 18:42:06.000000000 +0000
++++ mopd-2.5.3/mopd/mopd.c	2002-11-17 13:05:38.000000000 +0000
+@@ -211,12 +211,14 @@ mopProcess(ii, pkt)
+ 
+ 	/* We don't known with transport, Guess! */
+ 
+-	trans = mopGetTrans(pkt, 0);
++	trans = mopGetTrans(pkt, ii->trans);
+ 
+ 	/* Ok, return if we don't wan't this message */
+ 
+-	if ((trans == TRANS_ETHER) && Not3Flag) return;
+-	if ((trans == TRANS_8023) && Not4Flag)	return;
++	if ((trans == TRANS_ETHER || trans == TRANS_FDDI_8021H) && Not3Flag)
++		return;
++	if ((trans == TRANS_8023 || trans == TRANS_FDDI_8022) && Not4Flag)
++		return;
+ 
+ 	index = 0;
+ 	mopGetHeader(pkt, &index, &dst, &src, &ptype, &len, trans);
+diff -up --recursive --new-file mopd-2.5.3.macro/mopd/process.c mopd-2.5.3/mopd/process.c
+--- mopd-2.5.3.macro/mopd/process.c	2002-11-17 13:00:56.000000000 +0000
++++ mopd-2.5.3/mopd/process.c	2002-11-17 13:05:38.000000000 +0000
+@@ -76,6 +76,10 @@ mopProcessInfo(pkt,index,moplen,dl_rpr,t
+ 	case TRANS_8023:
+ 		moplen = moplen + 14;
+ 		break;
++	case TRANS_FDDI_8021H:
++	case TRANS_FDDI_8022:
++		moplen = moplen + 23;
++		break;
+ 	}
+ 
+ 	itype = mopGetShort(pkt,index); 
+@@ -276,10 +280,10 @@ mopStartLoad(dst, src, dl_rpr, trans)
+ 		dllist[slot].dl_bsz = 1010;
+ 	if (dllist[slot].dl_bsz == 0)           /* Needed by "big" VAXen */
+ 		dllist[slot].dl_bsz = MOP_K_DLBSZ_DEFAULT;
+-	if (trans == TRANS_8023)
++	if (trans == TRANS_8023 || trans == TRANS_FDDI_8022)
+ 		if (dllist[slot].dl_bsz > MAX_ETH_PAYLOAD - 8)
+ 			dllist[slot].dl_bsz = MAX_ETH_PAYLOAD - 8;
+-	if (trans == TRANS_ETHER)
++	if (trans != TRANS_8023)
+ 		dllist[slot].dl_bsz -= 2;	/* For packet length */
+ 	dllist[slot].dl_bsz -= 6;		/* For Memory Load header */
+ 
+diff -up --recursive --new-file mopd-2.5.3.macro/mopprobe/mopprobe.c mopd-2.5.3/mopprobe/mopprobe.c
+--- mopd-2.5.3.macro/mopprobe/mopprobe.c	2001-10-27 18:50:09.000000000 +0000
++++ mopd-2.5.3/mopprobe/mopprobe.c	2002-11-17 13:05:38.000000000 +0000
+@@ -148,27 +148,55 @@ mopProcess(ii, pkt)
+ 	u_char *pkt;
+ {
+ 	u_char  *dst, *src, *p, mopcode, tmpc, ilen;
+-	u_short *ptype, moplen, tmps, itype, len;
++	u_short *ptype, moplen, tmps, itype;
+ 	int	index, i, device, trans;
+ 
+-	dst	= pkt;
+-	src	= pkt+6;
+-	ptype   = (u_short *)(pkt+12);
+-	index   = 0;
+-	
+-	if (*ptype < 1600) {
+-		len = *ptype;
+-		trans = TRANS_8023;
+-		ptype = (u_short *)(pkt+20);
+-		p = pkt+22;
+-		if (Not4Flag) return;
+-	} else {
+-		len = 0;
+-		trans = TRANS_ETHER;
+-		p = pkt+14;
+-		if (Not3Flag) return;
++	trans = ii->trans;
++	if ((trans & (TRANS_ETHER + TRANS_8023))) {
++		ptype = (u_short *)(pkt+12);
++		if (ntohs(*ptype) < 1600) {
++			trans &= TRANS_8023;
++			if (Not4Flag)
++				return;
++		} else {
++			trans &= TRANS_ETHER;
++			if (Not3Flag)
++				return;
++		}
++	} else if ((trans & (TRANS_FDDI_8021H + TRANS_FDDI_8022))) {
++		if (*pkt >= MOP_K_FDDI_FC_MIN && *pkt <= MOP_K_FDDI_FC_MAX) {
++			if (!bcmp((char *)(pkt+16),
++					 (char *)dl_802_proto, 3)) {
++				trans &= TRANS_FDDI_8022;
++				if (Not4Flag)
++					return;
++			} else if (!bcmp((char *)(pkt+16),
++				  (char *)dl_8021h_proto, 3)) {
++				trans &= TRANS_FDDI_8021H;
++				if (Not3Flag)
++					return;
++			} else
++				return;
++		} else
++			return;
++	} else
++		return;
++
++	switch (trans) {
++	case TRANS_8023:
++	case TRANS_ETHER:
++		dst = pkt;
++		src = pkt + 6;
++		break;
++	case TRANS_FDDI_8022:
++	case TRANS_FDDI_8021H:
++		dst = pkt + 1;
++		src = pkt + 7;
++		break;
++	default:
++		return;
+ 	}
+-	
++
+ 	/* Ignore our own messages */
+ 
+ 	if (mopCmpEAddr(ii->eaddr,src) == 0) {
+@@ -183,11 +211,21 @@ mopProcess(ii, pkt)
+ 	
+ 	switch (trans) {
+ 	case TRANS_8023:
+-		moplen = len;
++		index = 22;
++		moplen = ntohs(*ptype);
+ 		break;
+-	default:
++	case TRANS_ETHER:
++		index = 14;
++		moplen = mopGetShort(pkt,&index);
++		break;
++	case TRANS_FDDI_8022:
++	case TRANS_FDDI_8021H:
++		index = 21;
+ 		moplen = mopGetShort(pkt,&index);
++		break;
+ 	}
++	p = pkt + index;
++	index = 0;
+ 	mopcode	= mopGetChar(p,&index);
+ 
+ 	/* Just process System Information */
+@@ -203,7 +241,7 @@ mopProcess(ii, pkt)
+ 	
+ 	itype	= mopGetShort(pkt,&index);
+ 
+-	while (index < (int)(moplen + 2)) {
++	while (index < (int)(moplen)) {
+ 		ilen	= mopGetChar(pkt,&index);
+ 		switch (itype) {
+ 		case 0:
+diff -up --recursive --new-file mopd-2.5.3.macro/moptrace/moptrace.c mopd-2.5.3/moptrace/moptrace.c
+--- mopd-2.5.3.macro/moptrace/moptrace.c	2001-10-27 18:50:29.000000000 +0000
++++ mopd-2.5.3/moptrace/moptrace.c	2002-11-17 13:05:38.000000000 +0000
+@@ -149,12 +149,14 @@ mopProcess(ii, pkt)
+ 
+ 	/* We don't known which transport, Guess! */
+ 
+-	trans = mopGetTrans(pkt, 0);
++	trans = mopGetTrans(pkt, ii->trans);
+ 
+ 	/* Ok, return if we don't want this message */
+ 
+-	if ((trans == TRANS_ETHER) && Not3Flag) return;
+-	if ((trans == TRANS_8023) && Not4Flag)	return;
++	if ((trans == TRANS_ETHER || trans == TRANS_FDDI_8021H) && Not3Flag)
++		return;
++	if ((trans == TRANS_8023 || trans == TRANS_FDDI_8022) && Not4Flag)
++		return;
+ 
+ 	mopPrintHeader(stdout, pkt, trans);
+ 	mopPrintMopHeader(stdout, pkt, trans);
