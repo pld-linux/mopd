@@ -39,7 +39,7 @@ The Maintenance Operations Protocol (MOP) loader daemon services MOP
 load requests on one or all Ethernet and FDDI interfaces. Normally, a
 filename (ending in .SYS) is included in the load request; if no
 filename is given, mopd must know what image to load. When it receives
-a request, mopd checks to see if the file exists in /tftpboot/mop. If
+a request, mopd checks to see if the file exists in /var/lib/mop. If
 the filename isn't given, the MAC address of the target is used as a
 filename (e.g., 08002b09f4de.SYS, which might be a soft link to
 another file). Mopd supports files in ELF, a.out and a few Digital
