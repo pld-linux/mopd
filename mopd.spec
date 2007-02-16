@@ -1,7 +1,7 @@
 Summary:	The Maintenance Operations Protocol (MOP) loader daemon
 Name:		mopd
 Version:	2.5.3
-Release:	0.1
+Release:	0.2
 License:	BSD
 Group:		Networking/Daemons
 #Source0:	http://linux-vax.sourceforge.net/download/mopd-linux.tar.gz
@@ -9,6 +9,7 @@ Group:		Networking/Daemons
 Source0:	ftp://ftp3.ds.pg.gda.pl/people/macro/mopd/%{name}-%{version}.tar.gz
 # Source0-md5:	b2bbea45c885309682c24e3f8674ac45
 Source1:	%{name}.init
+Source2:	%{name}.sysconfig
 Patch0:		%{name}-linux.patch
 Patch1:		%{name}-vax-linux.patch
 Patch2:		%{name}-proto.patch
@@ -88,6 +89,7 @@ install mopprobe/mopprobe.1 $RPM_BUILD_ROOT%{_mandir}/man1/mopprobe.1
 install moptrace/moptrace.1 $RPM_BUILD_ROOT%{_mandir}/man1/moptrace.1
 
 install %{SOURCE1} $RPM_BUILD_ROOT/etc/rc.d/init.d/mopd
+install %{SOURCE2} $RPM_BUILD_ROOT/etc/sysconfig/mopd
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -104,11 +106,10 @@ fi
 
 %files
 %defattr(644,root,root,755)
-%attr(754, root, root) %config(noreplace) /etc/rc.d/init.d/mopd
-%attr(755, root, root) %{_bindir}/*
-%attr(755, root, root) %{_sbindir}/*
+%attr(754,root,root) %config(noreplace) /etc/rc.d/init.d/mopd
+%attr(640,root,root) %config(noreplace) %verify(not md5 mtime size) /etc/sysconfig/mopd
+%attr(755,root,root) %{_bindir}/*
+%attr(755,root,root) %{_sbindir}/*
 %dir /var/lib/mop
 %{_mandir}/man1/*
 %{_mandir}/man8/*
-
-%attr(755, root, root) %{_sbindir}/mopd
