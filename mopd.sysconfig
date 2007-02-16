@@ -1,0 +1,6 @@
+# Nice level for mopd
+SERVICE_RUN_NICE_LEVEL="+0"
+
+# The name of the network interface which mopd should listen on
+# If ommited then mopd will listen on all interfaces
+#INTERFACE=eth0
