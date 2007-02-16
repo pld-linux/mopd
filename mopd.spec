@@ -75,7 +75,7 @@ formats.
 
 %install
 rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT/etc/rc.d/init.d
+install -d $RPM_BUILD_ROOT/etc/{sysconfig,rc.d/init.d}
 install -d $RPM_BUILD_ROOT{%{_sbindir},%{_bindir},%{_mandir}/man{1,8},/var/lib/mop}
 
 install mopd/mopd $RPM_BUILD_ROOT%{_sbindir}/mopd
