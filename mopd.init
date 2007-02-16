@@ -29,11 +29,10 @@ start() {
 	# Check if the service is already running?
 	if [ ! -f /var/lock/subsys/mopd ]; then
 		msg_starting MOPD
-		if [ "$INTERFACES" = "all" ]; then
-			MOPDOPTIONS="-a"
-		else
-			MOPDOPTIONS=$INTERFACES
-		daemon mopd $MOPDOPTIONS
+		if [ -z "$INTERFACE" ]; then
+			INTERFACE="-a"
+		fi
+		daemon mopd $INTERFACE
 		RETVAL=$?
 		[ $RETVAL -eq 0 ] && touch /var/lock/subsys/mopd
 	else
