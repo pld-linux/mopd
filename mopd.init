@@ -44,7 +44,7 @@ stop() {
 	if [ -f /var/lock/subsys/mopd ]; then
 		msg_stopping MOPD
 		killproc mopd
-		rm -f /var/lock/subsys/postgrey >/dev/null 2>&1
+		rm -f /var/lock/subsys/mopd >/dev/null 2>&1
 	else
 		msg_not_running MOPD
 	fi
