@@ -1,4 +1,5 @@
 Summary:	The Maintenance Operations Protocol (MOP) loader daemon
+Summary(pl.UTF-8):	Demon wczytujący MOP (Maintenance Operations Protocol)
 Name:		mopd
 Version:	2.5.3
 Release:	0.2
@@ -31,8 +32,8 @@ Patch17:	%{name}-alpha.patch
 Patch18:	%{name}-gcc34.patch
 Patch19:	%{name}-gcc4.patch
 Patch20:	%{name}-pld.patch
-Requires(post,preun):	/sbin/chkconfig
 BuildRequires:	elfutils-devel
+Requires(post,preun):	/sbin/chkconfig
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %description
@@ -45,6 +46,17 @@ the filename isn't given, the MAC address of the target is used as a
 filename (e.g., 08002b09f4de.SYS, which might be a soft link to
 another file). Mopd supports files in ELF, a.out and a few Digital
 formats.
+
+%description -l pl.UTF-8
+Demon wczytujący MOP (Maintenance Operations Protocol) obsługuje
+żądania wczytania MOP dla jednego lub wszystkich interfejsów Ethernet
+i FDDI. Zwykle nazwa pliku (kończąca się .SYS) jest zawarta w żądaniu;
+jeśli nie podano nazwy pliku, mopd musi wiedzieć, jaki obraz wczytać.
+Po otrzymaniu żądania mopd sprawdza, czy plik istnieje w /var/lib/mop.
+Jeśli nie podano nazwy pliku, jako nazwa używany jest docelowy adres
+MAC (np. 08002b09f4de.SYS, co może być dowiązaniem do innego pliku).
+mopd obsługuje pliki w formatach ELF, a.out i kilku formatach
+Digitala.
 
 %prep
 %setup -q
@@ -71,7 +83,8 @@ formats.
 %patch20 -p1
 
 %build
-%{__make} -j1 CFLAGS="%{rpmcflags}"
+%{__make} -j1 \
+	CFLAGS="%{rpmcflags}"
 
 %install
 rm -rf $RPM_BUILD_ROOT
